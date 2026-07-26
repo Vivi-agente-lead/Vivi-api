@@ -23,14 +23,23 @@ def test_app_module_imports() -> None:
     os.environ.get("VIVI_SKIP_HTTP_TESTS") == "1",
     reason="HTTP smoke tests disabled via VIVI_SKIP_HTTP_TESTS",
 )
-def test_health_endpoint() -> None:
-    """`GET /health` returns 200 with `{"status": "ok"}`.
+def test_health_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`GET /health` returns 200 with `{"status": "ok"}` when schema creation
+    succeeded at startup.
 
-    Uses FastAPI's TestClient (sync wrapper around httpx). We build a minimal
-    client that bypasses DB-dependent lifespan paths so it works without a
-    Postgres running.
+    `app.core.db.init_db` is patched to a no-op so this stays deterministic
+    regardless of whether a real Postgres happens to be reachable on the
+    host running the tests — the unreachable-DB case is covered by
+    `tests/test_health_readiness.py`.
     """
     from fastapi.testclient import TestClient
+
+    import app.core.db as db_module
+
+    async def _fake_init_db() -> None:
+        return None
+
+    monkeypatch.setattr(db_module, "init_db", _fake_init_db)
 
     from app.main import app
 

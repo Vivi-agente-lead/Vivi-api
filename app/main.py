@@ -22,7 +22,15 @@ logging.basicConfig(level=settings.app_log_level.upper())
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: init checkpointer + create tables. Shutdown: close checkpointer."""
+    """Startup: init checkpointer + create tables. Shutdown: close checkpointer.
+
+    `app.state.db_ready` / `app.state.db_error` record whether schema creation
+    succeeded, so `GET /health` can report 503 (naming the dependency) instead
+    of a silent 200 against a database with no tables. The real workflow this
+    protects: an operator drops the DB, starts the API expecting the lifespan
+    to recreate the schema, then runs the seed script — if `init_db()` fails
+    silently, the operator gets a 200 health check and no diagnosis.
+    """
     logger.info("lifespan.startup", extra={"env": settings.app_env})
 
     try:
@@ -30,13 +38,18 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("checkpointer.init.failed: %s", exc, extra={"error": str(exc)})
 
+    app.state.db_ready = True
+    app.state.db_error = None
+
     if not settings.is_test_env:
         try:
             from app.core.db import init_db
 
             await init_db()
         except Exception as exc:
-            logger.warning("init_db.failed: %s", exc, extra={"error": str(exc)})
+            logger.error("init_db.failed: %s", exc, extra={"error": str(exc)})
+            app.state.db_ready = False
+            app.state.db_error = str(exc)
 
     yield
 
