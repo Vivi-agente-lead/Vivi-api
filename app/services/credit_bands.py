@@ -22,7 +22,6 @@ spinning up a database.
 
 from __future__ import annotations
 
-import hashlib
 from typing import Final
 
 __all__ = [
@@ -45,23 +44,24 @@ CREDIT_BANDS: Final[list[tuple[int, int, str, int]]] = [
     (150, 499, "Malo", 0),
 ]
 
-# Demo-star cedulas — verbatim from ``design.md`` §7.4. Harcoding them here keeps
-# the live demo reproductible even when the afiliado seed table is empty: the
-# same cedula always yields the same ``score_credito`` the seeded afiliado row
-# would have carried, so the demo can drive ``simulate_bureau_cedula`` directly.
+# Demo-star cedulas — verbatim from ``design.md`` §7.4. These are the seeded
+# *afiliado* rows (``scripts/seed_colsubsidio.py``), documented here so the
+# demo walkthrough and the tests share one source. They are NOT consulted by
+# :func:`simulate_bureau_cedula`: an afiliado never takes the simulation path.
 DEMO_CEDULA_SCORES: Final[dict[str, int]] = {
     "1010101010": 880,  # Andrea Marín — A — Excelente
     "2020202020": 720,  # Beto Salazar  — B — Bueno
     "3030303030": 580,  # Camila Ríos   — C — Regular
 }
 
-# The deterministic fallback band for a no-afiliado cedula is constrained to
-# [550, 850] so the live demo always lands inside a real (non-Malo) band and
-# the 90/10 differential stays observable. Anything below 500 (Malo) would
-# collapse Bucket-1 of no-afiliado to 0 for almost every cedula, hiding the
-# threshold lever that the ``lead-scoring`` spec (90/10) and case 12 rely on.
-_SIM_FLOOR: Final[int] = 550
-_SIM_CEIL: Final[int] = 850
+# One representative score per band of :data:`CREDIT_BANDS`, in descending
+# order — ``design.md`` §7.3 verbatim. The table deliberately includes the Malo
+# outcome (400): a simulated no-afiliado must be able to land in every band a
+# real afiliado can, otherwise affiliation stops being a strictly positive
+# signal (spec scenario *Affiliation is a strictly positive signal*). A floored
+# range would guarantee the no-afiliado at least Regular while a real afiliado
+# could band Malo.
+_SIM_BANDS: Final[list[int]] = [820, 760, 710, 670, 600, 400]
 
 
 def band_from_score_credito(score_credito: int | None) -> tuple[int, str]:
@@ -81,28 +81,19 @@ def band_from_score_credito(score_credito: int | None) -> tuple[int, str]:
     return (0, "Malo")
 
 
-def simulate_bureau_cedula(numero_documento: str) -> int:
-    """Deterministic cedula-derived credit-score simulation.
+def simulate_bureau_cedula(numero_documento: str | int | None) -> int:
+    """Deterministic cedula-derived credit-score simulation (``design.md`` §7.3).
 
-    Used only for **no-afiliado** leads whose ``score_credito`` is not on file.
-    Same ``numero_documento`` always yields the same ``score_credito`` across
-    process invocations (pure-Python, no randomness), so the scorer stays a
-    total function of its inputs.
+    Used only for **no-afiliado** leads, whose ``score_credito`` is not on file.
+    The cedula's digits pick one band of :data:`_SIM_BANDS` by modulo, so the
+    same ``numero_documento`` always yields the same score across process
+    invocations (pure integer arithmetic — no randomness, no hash seed) and the
+    scorer stays a total function of its inputs.
 
-    Order of resolution:
-
-    1. A member of :data:`DEMO_CEDULA_SCORES` returns the demo-band score.
-    2. Any other cedula returns a SHA-256-derived score in
-       ``[_SIM_FLOOR, _SIM_CEIL]`` (550-850) so the demo always lands in a
-       real band.
-    3. A cedula with no digits (or an empty string) falls back to ``_SIM_FLOOR``
-       rather than 0 — missing input is not a disaster scenario in the demo.
+    A cedula with no digits (or an empty/absent value) returns the Malo band:
+    an unusable document is not evidence of creditworthiness.
     """
-    if numero_documento in DEMO_CEDULA_SCORES:
-        return DEMO_CEDULA_SCORES[numero_documento]
-    digits = "".join(ch for ch in (numero_documento or "") if ch.isdigit())
+    digits = "".join(ch for ch in str(numero_documento or "") if ch.isdigit())
     if not digits:
-        return _SIM_FLOOR
-    digest = hashlib.sha256(digits.encode("utf-8")).digest()
-    n = int.from_bytes(digest[:8], "big")
-    return _SIM_FLOOR + (n % (_SIM_CEIL - _SIM_FLOOR + 1))
+        return _SIM_BANDS[-1]
+    return _SIM_BANDS[int(digits) % len(_SIM_BANDS)]

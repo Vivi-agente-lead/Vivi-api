@@ -24,6 +24,10 @@ right keys.
 
 from __future__ import annotations
 
+import json
+import subprocess
+import sys
+from pathlib import Path
 from typing import TypedDict
 
 import pytest
@@ -36,6 +40,7 @@ from app.services.credit_bands import (
 )
 from app.services.lead_scorer import (
     AHORRO_PTS,
+    CATEGORIA_PTS,
     ESTABILIDAD_INDEPENDIENTE,
     ESTABILIDAD_PTS,
     INGRESO_PTS,
@@ -373,34 +378,90 @@ def test_case_11_same_inputs_identical_across_invocations() -> None:
     assert first == second
 
 
-# ── Case 12: afiliado strictly outscores identical no-afiliado (90/10) ─────
-def test_case_12_afiliado_strictly_outscores_no_afiliado() -> None:
-    afiliado_lead = _ready_lead()  # numero_documento="1010101010"
-    afiliado_record = _afiliado("A", 880)
-    no_afiliado_record: AfiliadoRecord = {}  # afiliado=None at the call site
+# ── Case 12 / D3 regression: affiliation is a strictly positive signal ─────
+# The previous fixture-based case passed by coincidence: it used the demo
+# cedula `1010101010`, which the simulation special-cased to the very same 880
+# the afiliado record carried. Meanwhile the simulation was clamped to
+# [550, 850], so a simulated no-afiliado could never band Malo while a real
+# afiliado could — and a `(C, 500)` afiliado scored *below* the identical
+# no-afiliado lead. This is a property over a range of documents and
+# categorias instead.
 
-    afiliado_score, _, afiliado_class, afiliado_reason = score_lead(
-        afiliado_lead, afiliado_record
-    )
-    no_afiliado_score, _, no_afiliado_class, no_afiliado_reason = score_lead(
-        afiliado_lead, None
-    )
+# design.md §7.3 — the bureau simulation draws from the source band table,
+# which includes the Malo outcome (400).
+_SIM_BAND_TABLE: list[int] = [820, 760, 710, 670, 600, 400]
 
-    assert afiliado_score > no_afiliado_score
-    # Bucket 2 lever: afiliado gets cat A=15, no-afiliado gets 0
-    af_range = build_scoring_result(afiliado_lead, afiliado_record)
-    no_range = build_scoring_result(afiliado_lead, None)
-    assert af_range["breakdown"]["afiliacion"] == 15
-    assert no_range["breakdown"]["afiliacion"] == 0
-    # Both profiles identical otherwise; no-afiliado needs the higher threshold
-    afiliado_threshold = READY_THRESHOLD_AFILIADO  # 60
-    no_afiliado_threshold = READY_THRESHOLD_NO_AFILIADO  # 75
-    assert no_afiliado_threshold > afiliado_threshold
-    # Asymmetric reasoning identifies the threshold applied
-    assert "Umbral READY aplicado: 60 (afiliado)" in afiliado_reason
-    assert "Umbral READY aplicado: 75 (no afiliado)" in no_afiliado_reason
-    # And classification uses the right threshold on the afiliado side.
-    assert afiliado_class == "ready"
+
+def _documentos(count: int = 60) -> list[str]:
+    """Spread document numbers over every residue class of the band table."""
+    return [str(1_000_000_000 + i * 7919) for i in range(count)]
+
+
+def _mid_lead(**overrides: object) -> LeadProfile:
+    """A mid-tier profile whose maximum total stays well below the clamp.
+
+    36 non-credit points, so `credito + categoria` deltas are observable
+    without `min(100, …)` swallowing them.
+    """
+    base: LeadProfile = {
+        "rango_salarial": "2_4m",          # 10
+        "ahorros_o_cesantias": "3_10m",    # 9
+        "tiempo_compra_deseado": "6_meses",  # 8
+        "contrato_laboral": "termino_fijo",
+        "antiguedad_laboral": "1_2a",      # 9
+        "tiene_vivienda_propia": False,
+        "tiene_creditos_activos": False,
+        "condicion_discapacidad_familiar": False,
+        "numero_pac": 0,
+        "vis_recommended": False,
+        "subsidio_vivienda_anterior": False,
+    }
+    return {**base, **overrides}  # type: ignore[return-value]
+
+
+@pytest.mark.parametrize("categoria", ["A", "B", "C"])
+def test_regression_d3_affiliation_is_strictly_positive_over_documents(
+    categoria: str,
+) -> None:
+    """Two leads identical in every field except affiliation: the afiliado's
+    score is strictly greater, by exactly its Bucket-2 credit.
+
+    Affiliation cannot change a lead's credit standing, so the comparison
+    holds it fixed at the value the bureau simulation derives from the shared
+    document number. The property is exercised across the whole credit range,
+    Malo included — the floored simulation could not produce a Malo
+    no-afiliado at all.
+    """
+    credit_points_seen: set[int] = set()
+
+    for documento in _documentos():
+        lead = _mid_lead(numero_documento=documento)
+        # Identical credit standing — affiliation is the ONLY difference.
+        afiliado = _afiliado(categoria, simulate_bureau_cedula(documento))
+
+        af_score, af_rating, _, af_reason = score_lead(lead, afiliado)
+        no_score, no_rating, _, no_reason = score_lead(lead, None)
+
+        assert af_rating == no_rating, documento
+        assert af_score > no_score, (documento, categoria)
+        assert af_score - no_score == CATEGORIA_PTS[categoria], documento
+        # …and the no-afiliado also needs the higher READY threshold.
+        assert READY_THRESHOLD_NO_AFILIADO > READY_THRESHOLD_AFILIADO
+        assert "Umbral READY aplicado: 60 (afiliado)" in af_reason
+        assert "Umbral READY aplicado: 75 (no afiliado)" in no_reason
+
+        af_break = build_scoring_result(lead, afiliado)["breakdown"]
+        no_break = build_scoring_result(lead, None)["breakdown"]
+        assert af_break["afiliacion"] == CATEGORIA_PTS[categoria]
+        assert no_break["afiliacion"] == 0
+        assert af_break["credito"] == no_break["credito"]
+        credit_points_seen.add(af_break["credito"])
+
+    # The simulation is not floored: every band of the source table is
+    # reachable for a no-afiliado, Malo (0) included. Before the fix the
+    # simulated range was clamped to [550, 850], so a no-afiliado was
+    # guaranteed at least Regular while a real afiliado could band Malo.
+    assert credit_points_seen == {25, 22, 18, 12, 6, 0}
 
 
 # ── D1 regression: workbook `SI`/`NO` booleans reach the scorer normalized ──
@@ -518,21 +579,44 @@ def test_band_from_score_credito_out_of_range_is_malo() -> None:
     assert band_from_score_credito(-50) == (0, "Malo")
 
 
-def test_simulate_bureau_cedula_demo_cedulas() -> None:
-    assert simulate_bureau_cedula("1010101010") == 880  # Excelente
-    assert simulate_bureau_cedula("2020202020") == 720  # Bueno
-    assert simulate_bureau_cedula("3030303030") == 580  # Regular
+def test_simulate_bureau_cedula_draws_from_the_source_band_table() -> None:
+    # design.md §7.3: `[820, 760, 710, 670, 600, 400][int(digits) % 6]`.
+    # The demo cedulas are seeded *afiliados*; they take the afiliado branch
+    # and are no longer special-cased inside the simulation.
+    for documento in ("12345678", "1010101010", "2020202020", "3030303030"):
+        simulated = simulate_bureau_cedula(documento)
+        assert simulated in _SIM_BAND_TABLE
+        assert simulated == _SIM_BAND_TABLE[int(documento) % len(_SIM_BAND_TABLE)]
+        assert simulate_bureau_cedula(documento) == simulated  # deterministic
 
 
-def test_simulate_bureau_cedula_in_real_band_and_deterministic() -> None:
-    score = simulate_bureau_cedula("12345678")
-    assert 550 <= score <= 850  # always a real (non-Malo) band per design
-    assert simulate_bureau_cedula("12345678") == score
+def test_simulate_bureau_cedula_is_deterministic_across_processes() -> None:
+    """Spec: same `numero_documento` always yields the same band — including in
+    a separate process invocation (no hash-seed or clock dependency)."""
+    documentos = _documentos(12)
+    in_process = [simulate_bureau_cedula(d) for d in documentos]
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import json,sys;"
+            "from app.services.credit_bands import simulate_bureau_cedula as s;"
+            "print(json.dumps([s(d) for d in json.loads(sys.argv[1])]))",
+            json.dumps(documentos),
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+        cwd=str(Path(__file__).resolve().parent.parent),
+    )
+    assert json.loads(completed.stdout) == in_process
 
 
-def test_simulate_bureau_cedula_no_digits_falls_back_to_floor() -> None:
-    assert simulate_bureau_cedula("") == 550
-    assert simulate_bureau_cedula("no-digits-here") == 550
+def test_simulate_bureau_cedula_no_digits_is_the_malo_band() -> None:
+    # No usable document → the bottom band, not a fabricated mid-range floor.
+    assert simulate_bureau_cedula("") == 400
+    assert simulate_bureau_cedula("no-digits-here") == 400
 
 
 # ── classify_lead — pure threshold table ───────────────────────────────────
