@@ -73,8 +73,7 @@ def render_options(
       titles are truncated to 24 chars, but the full label always survives in
       the row `description` (<=72 chars), so nothing legible is lost even for
       the two `tipo_documento` labels over 24 chars ("Permiso especial de
-      permanencia", "Permiso por protección temporal") or the one `otra_caja`
-      name over 24 chars ("Comfamiliar Cartagena y Bolívar").
+      permanencia", "Permiso por protección temporal").
     - More than 100 options, or an empty option set -> `None`. The caller
       (`InboundMessageHandler`) degrades to plain text in both cases, and
       whenever the interactive send itself fails.
@@ -82,9 +81,8 @@ def render_options(
     Row/button `id`s are the canonical slug when `domain_normalizer.normalize`
     knows one for `field` (e.g. `4_8m`, `termino_fijo`), so a tap arrives at
     the existing deterministic parser with zero interpretation. Fields with no
-    slug table (`lugar_eleccion_vivir`, `otra_caja_compensacion`) fall back to
-    the verbatim label, which `validate_municipio` / `parse_caja_compensacion`
-    already accept as-is.
+    slug table (`lugar_eleccion_vivir`) fall back to the verbatim label, which
+    `validate_municipio` already accepts as-is.
     """
     cleaned = [o for o in options if o]
     if not cleaned:

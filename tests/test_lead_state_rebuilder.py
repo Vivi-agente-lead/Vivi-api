@@ -25,7 +25,7 @@ from tests.conftest import (
     make_afiliado,
     tool_config,
 )
-from tests.test_graph_traversal import ANSWERS_AFILIADO_READY, Conversation
+from tests.test_graph_traversal import Conversation
 
 
 @pytest.fixture
@@ -47,7 +47,7 @@ async def test_rebuild_returns_empty_for_a_conversation_with_no_lead_row(
 async def test_rebuild_restores_the_answers_and_re_derives_the_predicates(
     rebuilder_world: World,
 ) -> None:
-    """The three derived predicates are recomputed, never read from the row."""
+    """The two derived predicates are recomputed, never read from the row."""
     conversation_id = uuid.uuid4()
     repo = FakeLeadRepository(FakeSession())
     await repo.upsert_by_conversation_id(
@@ -59,7 +59,7 @@ async def test_rebuild_restores_the_answers_and_re_derives_the_predicates(
             "estado_civil": "union_libre",
             "contrato_laboral": "prestacion_servicios",
             "numero_pac": 0,
-            "total_ingresos_familiares_mensuales": Decimal("6000000"),
+            "total_ingresos_mensuales": Decimal("6000000"),
         },
     )
 
@@ -69,8 +69,8 @@ async def test_rebuild_restores_the_answers_and_re_derives_the_predicates(
     assert profile["autorizacion_datos"] is True
     assert profile["tiene_pareja"] is True
     assert profile["es_empleado"] is False
-    # A partner and no dependants — the one combination that is not cabeza.
-    assert profile["cabeza_de_hogar"] is False
+    # `rango_salarial` was never stored — re-derived from the household income.
+    assert profile["rango_salarial"] == "4_8m"
 
 
 async def test_rebuild_recomputes_edad_from_the_affiliate_record(
@@ -134,5 +134,5 @@ async def test_a_rebuilt_profile_resumes_the_graph_without_re_asking(
 
     await resumed.say("Termino indefinido")
     assert resumed.profile["contrato_laboral"] == "termino_indefinido"
-    assert resumed.nodes[-1] == "cap_emp_con_pareja"
-    assert resumed.awaiting == "total_ingresos_familiares_mensuales"
+    assert resumed.nodes[-1] == "recoger_capacidad"
+    assert resumed.awaiting == "total_ingresos_mensuales"

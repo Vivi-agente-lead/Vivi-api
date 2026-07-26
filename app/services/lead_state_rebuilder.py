@@ -6,11 +6,19 @@ every thread, and without this the conversation would silently restart at
 `autorizacion_datos` and re-ask a lead everything they already answered.
 
 The rebuild is **lossy by design**: only columns the `leads` table actually
-carries come back. The three derived predicates (`tiene_pareja`, `es_empleado`,
-`cabeza_de_hogar`) are recomputed from the restored slugs rather than stored, and
-`afiliado_record` is re-fetched, so a restored profile routes exactly like a live
-one. `autorizacion_datos` is inferred from the row's existence: the row is only
-created after consent was granted.
+carries come back. The two derived bookkeeping predicates (`tiene_pareja`,
+`es_empleado`) are recomputed from the restored slugs rather than stored, and
+`afiliado_record` is re-fetched, so a restored profile routes exactly like a
+live one. `autorizacion_datos` is inferred from the row's existence: the row
+is only created after consent was granted.
+
+v2 migration (``docs/v2-impact-analysis.md``): removes `antiguedad_laboral`,
+`total_ingresos_familiares_mensuales`, `condicion_discapacidad_familiar` and
+`cabeza_de_hogar` (columns dropped from the model, so the derivation for the
+last one is gone too); adds `gastos_mensuales`, `interes_afiliacion` and
+`preferencia_vis`. `rango_salarial` is re-derived from
+`total_ingresos_mensuales` when not already stored, mirroring
+`app.graph.nodes.capacity.recoger_capacidad`'s finalize step.
 """
 
 from __future__ import annotations
@@ -22,8 +30,8 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.graph.nodes._validators import (
-    derive_cabeza_de_hogar,
     derive_es_empleado,
+    derive_rango_salarial,
     derive_tiene_pareja,
 )
 from app.models.repositories.afiliado_repository import AfiliadoColsubsidioRepository
@@ -47,15 +55,14 @@ RESTORED_COLUMNS: tuple[str, ...] = (
     "contrato_laboral",
     "rango_salarial",
     "total_ingresos_mensuales",
-    "total_ingresos_familiares_mensuales",
-    "antiguedad_laboral",
+    "gastos_mensuales",
     "tiene_vivienda_propia",
     "ahorros_o_cesantias",
-    "condicion_discapacidad_familiar",
     "numero_pac",
     "tiene_creditos_activos",
     "subsidio_vivienda_anterior",
-    "cabeza_de_hogar",
+    "interes_afiliacion",
+    "preferencia_vis",
     "lugar_eleccion_vivir",
     "municipio_normalizado",
     "tiempo_compra_deseado",
@@ -98,8 +105,10 @@ async def rebuild_lead_profile(
 
     profile["tiene_pareja"] = derive_tiene_pareja(profile.get("estado_civil"))
     profile["es_empleado"] = derive_es_empleado(profile.get("contrato_laboral"))
-    if profile.get("numero_pac") is not None:
-        profile["cabeza_de_hogar"] = derive_cabeza_de_hogar(profile)
+    if profile.get("rango_salarial") is None:
+        derived = derive_rango_salarial(profile.get("total_ingresos_mensuales"))
+        if derived is not None:
+            profile["rango_salarial"] = derived
 
     if lead.afiliado_colsubsidio and lead.tipo_documento and lead.numero_documento:
         await _restore_afiliado(session, lead, profile)

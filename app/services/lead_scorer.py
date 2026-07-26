@@ -33,6 +33,11 @@ bonus loses its ``condicion_discapacidad_familiar`` trigger (field removed);
 only ``numero_pac > 0`` remains, unchanged at ``+8``. A new, separate
 ``pos_subsidio`` rule (not a scored bucket) mirrors the v2 diagram's
 ``Setear variable pos_subsidio = 0`` node.
+
+Graph-topology migration (the ``-15`` VIS red flag, decided): v2 collects
+``preferencia_vis`` as a stated field. ``_vis_preference`` fires the flag on
+the stated ``vis``/``ambas`` answer when present, falling back to the
+project-lookup-derived ``vis_recommended`` only when it is not.
 """
 
 from __future__ import annotations
@@ -271,6 +276,26 @@ def _capacidad_pts(ingreso: Any, gastos: Any) -> tuple[int, Decimal | None]:
     return 0, ratio
 
 
+def _vis_preference(lead: Mapping[str, Any] | None) -> bool:
+    """Whether the lead's preference points at a VIS project — v2 graph-topology
+    migration (``docs/v2-impact-analysis.md`` §4, §12 "The VIS red flag").
+
+    v2 collects `preferencia_vis` (`vis`, `no_vis`, `ambas`) as a stated
+    answer instead of only deriving `vis_recommended` from the project
+    lookup. The `-15` red flag fires on the **stated** preference (`vis` or
+    `ambas`) when it is present, falling back to the derived
+    `vis_recommended` only when `preferencia_vis` was never collected — which
+    is every lead on the linear qualification flow this change ships, since
+    `preferencia_vis` is asked only inside the not-yet-built project-browsing
+    loop (`docs/v2-impact-analysis.md` §1, §8). A stated `no_vis` therefore
+    suppresses the flag even when `vis_recommended` derived `True`.
+    """
+    stated = _get(lead, "preferencia_vis")
+    if stated is not None:
+        return stated in ("vis", "ambas")
+    return _get(lead, "vis_recommended") is True
+
+
 def compute_pos_subsidio(is_afiliado: bool, otra_caja_compensacion: bool | None) -> int:
     """The v2 diagram's ``Setear variable pos_subsidio = 0`` rule.
 
@@ -359,11 +384,9 @@ def score_lead(
     # Every lead-supplied boolean is read through the normalizer (`_flag`), so
     # the workbook's `SI`/`NO` literals drive these rules. `vis_recommended` is
     # derived by the scoring node's project lookup, never collected, so it is
-    # already a real bool.
-    vis_flag = (
-        _get(lead, "vis_recommended") is True
-        and _flag(lead, "tiene_vivienda_propia") is True
-    )
+    # already a real bool; `preferencia_vis` (v2) is the lead's own stated
+    # answer and takes priority when present — see `_vis_preference`.
+    vis_flag = _vis_preference(lead) and _flag(lead, "tiene_vivienda_propia") is True
     red = 0
     if vis_flag:
         red -= 15
@@ -485,10 +508,7 @@ def build_scoring_result(
         _get(lead, "total_ingresos_mensuales"), _get(lead, "gastos_mensuales")
     )
 
-    vis_flag = (
-        _get(lead, "vis_recommended") is True
-        and _flag(lead, "tiene_vivienda_propia") is True
-    )
+    vis_flag = _vis_preference(lead) and _flag(lead, "tiene_vivienda_propia") is True
     red = 0
     if vis_flag:
         red -= 15

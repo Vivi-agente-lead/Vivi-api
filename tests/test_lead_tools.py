@@ -494,7 +494,6 @@ async def test_classify_lead_returns_a_verdict_whose_classification_is_the_statu
             "ahorros_o_cesantias": "mas_40m",
             "tiempo_compra_deseado": "3_meses",
             "contrato_laboral": "termino_indefinido",
-            "antiguedad_laboral": "mas_2a",
         },
         config=_config(),
     )

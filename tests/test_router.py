@@ -1,9 +1,8 @@
 """Conditional-edge predicate tests for the lead-profiling graph.
 
-Covers task 4.2/4.3 and the `leads-conversational-flow` scenarios *Menor de edad
-… no-afiliado path*, *Menor de edad … afiliado path*, *Terminal routing uses the
-LangGraph END sentinel*, *Afiliado branch skips identidad, otra_caja, edad* and
-*Pareja vs sin-pareja income fields*.
+Covers the `leads-conversational-flow` scenarios *Menor de edad … no-afiliado
+path*, *Menor de edad … afiliado path*, *Terminal routing uses the LangGraph
+END sentinel* and *Afiliado branch skips identidad, otra_caja, edad*.
 
 Why these tests drive a **compiled graph** instead of only comparing return
 values: LangGraph accepts an unregistered destination silently. A predicate that
@@ -14,6 +13,12 @@ every case below asserts the **traversal** the predicate produced, and the
 terminal cases additionally assert that LangGraph logged no unknown-channel
 warning, which is the only observable difference between the real ``END``
 sentinel and a string that merely looks like it.
+
+v2 migration (``docs/v2-impact-analysis.md``): `_route_capacity` and
+`_route_otra_caja` are deleted along with the four capacity bundles and the
+v1 caja-name prompt (`app/graph/router.py`'s module docstring). `_route_edad`
+now routes an adult no-afiliado to `recoger_interes_afiliacion` instead of
+`recoger_estado_civil`.
 """
 
 from __future__ import annotations
@@ -29,22 +34,15 @@ from app.graph.router import (
     MINIMUM_AGE,
     _route_afiliado,
     _route_autorizacion,
-    _route_capacity,
     _route_edad,
-    _route_otra_caja,
 )
 
 # Every destination any predicate under test can return.
 _DESTINATIONS: tuple[str, ...] = (
     "pedir_cedula",
     "recoger_identidad",
+    "recoger_interes_afiliacion",
     "recoger_estado_civil",
-    "recoger_otra_caja",
-    "recoger_empleo",
-    "cap_emp_con_pareja",
-    "cap_emp_sin_pareja",
-    "cap_ind_con_pareja",
-    "cap_ind_sin_pareja",
 )
 
 
@@ -157,8 +155,8 @@ def test_route_afiliado_underage_returns_the_imported_sentinel():
 @pytest.mark.parametrize(
     ("profile", "expected"),
     [
-        ({"edad": 41}, ["source", "recoger_estado_civil"]),
-        ({"edad": MINIMUM_AGE}, ["source", "recoger_estado_civil"]),
+        ({"edad": 41}, ["source", "recoger_interes_afiliacion"]),
+        ({"edad": MINIMUM_AGE}, ["source", "recoger_interes_afiliacion"]),
         ({"edad": 17}, ["source"]),
         ({"edad": 0}, ["source"]),
         ({"edad": None}, ["source"]),
@@ -174,65 +172,7 @@ def test_route_edad_unknown_age_returns_the_imported_sentinel():
     assert _route_edad({"lead_profile": {}}) is END
 
 
-# ── Otra caja de compensación (no-afiliado only) ────────────────────────────
-@pytest.mark.parametrize(
-    ("profile", "expected"),
-    [
-        ({"afiliado_colsubsidio": True}, ["source", "recoger_empleo"]),
-        ({"afiliado_colsubsidio": False}, ["source", "recoger_otra_caja"]),
-        ({}, ["source", "recoger_otra_caja"]),
-    ],
-    ids=["afiliado_salta", "no_afiliado_pregunta", "desconocido_pregunta"],
-)
-async def test_route_otra_caja_traversal(profile, expected, caplog):
-    assert await _traverse(_route_otra_caja, profile, caplog) == expected
-
-
-# ── Capacity bundle selection ───────────────────────────────────────────────
-@pytest.mark.parametrize(
-    ("contrato", "estado_civil", "expected_bundle"),
-    [
-        ("termino_indefinido", "casado", "cap_emp_con_pareja"),
-        ("termino_fijo", "union_libre", "cap_emp_con_pareja"),
-        ("termino_indefinido", "soltero", "cap_emp_sin_pareja"),
-        ("termino_fijo", "divorciado", "cap_emp_sin_pareja"),
-        ("termino_indefinido", "separado", "cap_emp_sin_pareja"),
-        ("termino_fijo", "viudo", "cap_emp_sin_pareja"),
-        ("prestacion_servicios", "casado", "cap_ind_con_pareja"),
-        ("prestacion_servicios", "union_libre", "cap_ind_con_pareja"),
-        ("prestacion_servicios", "soltero", "cap_ind_sin_pareja"),
-        ("prestacion_servicios", "divorciado", "cap_ind_sin_pareja"),
-        ("prestacion_servicios", "separado", "cap_ind_sin_pareja"),
-        ("prestacion_servicios", "viudo", "cap_ind_sin_pareja"),
-    ],
-)
-async def test_route_capacity_traversal(contrato, estado_civil, expected_bundle, caplog):
-    profile = {
-        "contrato_laboral": contrato,
-        "es_empleado": derive_es_empleado(contrato),
-        "estado_civil": estado_civil,
-        "tiene_pareja": derive_tiene_pareja(estado_civil),
-    }
-    assert await _traverse(_route_capacity, profile, caplog) == ["source", expected_bundle]
-
-
-async def test_route_capacity_defaults_to_independiente_sin_pareja(caplog):
-    """Unknown employment and marital status must still reach a real bundle.
-
-    The bundle is where `subsidio_vivienda_anterior`, `numero_pac` and
-    `condicion_discapacidad_familiar` are collected, so no lead may fall off the
-    graph here.
-    """
-    assert await _traverse(_route_capacity, {}, caplog) == ["source", "cap_ind_sin_pareja"]
-
-
-def test_route_capacity_never_reads_the_literal_empleado():
-    """`"empleado"` appears nowhere in the source `contrato_laboral` domain."""
-    profile = {"contrato_laboral": "empleado", "es_empleado": derive_es_empleado("empleado")}
-    assert _route_capacity({"lead_profile": profile}) == "cap_ind_sin_pareja"
-
-
-# ── Derived predicates ──────────────────────────────────────────────────────
+# ── Derived predicates (bookkeeping only — no longer routing) ───────────────
 @pytest.mark.parametrize(
     ("estado_civil", "expected"),
     [
@@ -256,6 +196,7 @@ def test_derive_tiene_pareja(estado_civil, expected):
         ("termino_fijo", True),
         ("termino_indefinido", True),
         ("prestacion_servicios", False),
+        ("independiente", False),
         ("empleado", False),
         (None, False),
     ],

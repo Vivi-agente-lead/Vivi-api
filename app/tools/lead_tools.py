@@ -66,24 +66,32 @@ __all__ = [
 
 # Enumerated lead fields routed through `domain_normalizer.normalize` before the
 # write. `municipio_normalizado` is handled separately (its own table).
+# `otra_caja_compensacion` is NOT here: it is a derived boolean (never a raw
+# label to normalize) — see `app.graph.nodes.collect.recoger_interes_afiliacion`.
 _ENUMERATED_FIELDS: tuple[str, ...] = (
     "tipo_documento",
     "estado_civil",
     "contrato_laboral",
     "rango_salarial",
-    "antiguedad_laboral",
     "ahorros_o_cesantias",
     "tiempo_compra_deseado",
+    "interes_afiliacion",
+    "preferencia_vis",
 )
 
 # Money columns are `Numeric(14, 2)`; the LLM sends plain numbers.
 _DECIMAL_FIELDS: tuple[str, ...] = (
     "total_ingresos_mensuales",
-    "total_ingresos_familiares_mensuales",
+    "gastos_mensuales",
 )
 
 # Columns copied verbatim from a `leads` row into the tool response / the
 # scorer input. Kept explicit so a schema change is a deliberate edit here.
+#
+# v2 migration (``docs/v2-impact-analysis.md``): removes `antiguedad_laboral`,
+# `total_ingresos_familiares_mensuales`, `condicion_discapacidad_familiar` and
+# `cabeza_de_hogar` (columns dropped from the model); adds `gastos_mensuales`,
+# `interes_afiliacion` and `preferencia_vis`.
 _LEAD_COLUMNS: tuple[str, ...] = (
     "tipo_documento",
     "numero_documento",
@@ -96,15 +104,14 @@ _LEAD_COLUMNS: tuple[str, ...] = (
     "contrato_laboral",
     "rango_salarial",
     "total_ingresos_mensuales",
-    "total_ingresos_familiares_mensuales",
-    "antiguedad_laboral",
+    "gastos_mensuales",
     "tiene_vivienda_propia",
     "ahorros_o_cesantias",
-    "condicion_discapacidad_familiar",
     "numero_pac",
     "tiene_creditos_activos",
     "subsidio_vivienda_anterior",
-    "cabeza_de_hogar",
+    "interes_afiliacion",
+    "preferencia_vis",
     "lugar_eleccion_vivir",
     "municipio_normalizado",
     "tiempo_compra_deseado",
@@ -313,21 +320,19 @@ async def save_lead(
     afiliado_colsubsidio: bool | None = None,
     nombre_apellido: str | None = None,
     categoria: str | None = None,
-    otra_caja_compensacion: str | None = None,
+    otra_caja_compensacion: bool | None = None,
     estado_civil: str | None = None,
     edad: int | None = None,
     contrato_laboral: str | None = None,
     rango_salarial: str | None = None,
     total_ingresos_mensuales: float | None = None,
-    total_ingresos_familiares_mensuales: float | None = None,
-    antiguedad_laboral: str | None = None,
+    gastos_mensuales: float | None = None,
     tiene_vivienda_propia: bool | None = None,
     ahorros_o_cesantias: str | None = None,
-    condicion_discapacidad_familiar: bool | None = None,
     numero_pac: int | None = None,
-    tiene_creditos_activos: bool | None = None,
     subsidio_vivienda_anterior: bool | None = None,
-    cabeza_de_hogar: bool | None = None,
+    interes_afiliacion: str | None = None,
+    preferencia_vis: str | None = None,
     lugar_eleccion_vivir: str | None = None,
     municipio_normalizado: str | None = None,
     tiempo_compra_deseado: str | None = None,
@@ -344,26 +349,30 @@ async def save_lead(
     classification is written by `classify_lead`.
 
     Args:
-        tipo_documento: `CC`, `CE`, `PA`, `PEP` or `PPT`.
+        tipo_documento: `CC`, `CE`, `PA`, `PEP`, `PPT` or `CD`.
         numero_documento: document number, digits only.
         afiliado_colsubsidio: whether the person is a Colsubsidio affiliate.
         nombre_apellido: full name.
         categoria: affiliate categoria `A`, `B` or `C`.
-        otra_caja_compensacion: another caja de compensación, or `ninguna`.
+        otra_caja_compensacion: derived boolean — `True` only when
+            `interes_afiliacion` is "No, estoy afiliado a otra caja de
+            compensación"; never asked directly, never set for an affiliate.
         estado_civil: Soltero, Casado, Divorciado, Union libre, Separado, Viudo.
-        edad: age in full years (derived server-side; do not guess it).
-        contrato_laboral: Termino fijo, Termino indefinido, Prestacion de servicios.
+        edad: age in full years (stated directly by a no-afiliado; derived
+            server-side from the record for an affiliate).
+        contrato_laboral: Termino fijo, Termino indefinido, Prestacion de
+            servicios, Independiente.
         rango_salarial: 2 millones o menos … mas de 10 millones.
-        total_ingresos_mensuales: monthly income of a lead without a partner.
-        total_ingresos_familiares_mensuales: household income when there is a partner.
-        antiguedad_laboral: menos de 1 año, 1 a 2 años, mas de dos años.
-        tiene_vivienda_propia: whether the person already owns a home.
+        total_ingresos_mensuales: household monthly income.
+        gastos_mensuales: average household monthly expenses.
+        tiene_vivienda_propia: whether the person or their partner already
+            owns a home.
         ahorros_o_cesantias: No tengo ahorros. … Más de $40 millones.
-        condicion_discapacidad_familiar: disability in the household.
         numero_pac: number of dependants (personas a cargo).
-        tiene_creditos_activos: whether the person has active loans.
         subsidio_vivienda_anterior: whether a housing subsidy was granted before.
-        cabeza_de_hogar: derived head-of-household flag.
+        interes_afiliacion: no-afiliado only — whether the person wants to
+            start affiliating with Colsubsidio.
+        preferencia_vis: VIS, NO VIS or Ambas.
         lugar_eleccion_vivir: the location option chosen, verbatim.
         municipio_normalizado: catalogue municipio; derived from
             `lugar_eleccion_vivir` when omitted.
@@ -399,15 +408,13 @@ async def save_lead(
         "contrato_laboral": contrato_laboral,
         "rango_salarial": rango_salarial,
         "total_ingresos_mensuales": total_ingresos_mensuales,
-        "total_ingresos_familiares_mensuales": total_ingresos_familiares_mensuales,
-        "antiguedad_laboral": antiguedad_laboral,
+        "gastos_mensuales": gastos_mensuales,
         "tiene_vivienda_propia": tiene_vivienda_propia,
         "ahorros_o_cesantias": ahorros_o_cesantias,
-        "condicion_discapacidad_familiar": condicion_discapacidad_familiar,
         "numero_pac": numero_pac,
-        "tiene_creditos_activos": tiene_creditos_activos,
         "subsidio_vivienda_anterior": subsidio_vivienda_anterior,
-        "cabeza_de_hogar": cabeza_de_hogar,
+        "interes_afiliacion": interes_afiliacion,
+        "preferencia_vis": preferencia_vis,
         "lugar_eleccion_vivir": lugar_eleccion_vivir,
         "municipio_normalizado": municipio_normalizado,
         "tiempo_compra_deseado": tiempo_compra_deseado,
@@ -514,8 +521,8 @@ async def classify_lead(*, config: RunnableConfig) -> str:
 
     Returns:
         JSON `{"status", "score", "score_rating", "classification", "reasoning"}`
-        where `classification` equals `status` and is one of `ready`, `nurture`
-        or `nurture_social`.
+        where `classification` equals `status` and is one of `calificado`,
+        `nutrible` or `no_calificado`.
     """
     ctx = get_tool_context(config)
     if ctx.conversation_id is None:

@@ -96,68 +96,10 @@ TERMINAL_STATUSES: Final[frozenset[str]] = frozenset(
     {"calificado", "nutrible", "no_calificado"}
 )
 
-# ── Caja de compensación vocabulary (sheet `Leads`, column `Caja de
-#    Compensación`, transcribed verbatim) ─────────────────────────────────────
-# DEPRECATED by v2 (docs/v2-impact-analysis.md §5): the caja-name question is
-# replaced by the `interes_afiliacion` boolean derivation above, and v2
-# deletes this vocabulary entirely. It is KEPT here, unused by the v2 domain
-# layer and scorer, ONLY because `app/graph/nodes/_validators.py`,
-# `app/graph/nodes/{collect,closing,_common,capacity}.py`,
-# `app/graph/builder.py`, `app/prompts/slices.py` and
-# `app/services/whatsapp_interactive.py` still import/reference it for the v1
-# caja-selection flow. Those files are graph/prompt topology, out of scope for
-# this change (see the apply report's "Governing rule" note) — deleting this
-# constant now would break their imports. The graph-topology migration that
-# collapses the caja question into `interes_afiliacion` MUST delete this
-# constant and every one of those call sites together.
-CAJA_COMPENSACION: Final[frozenset[str]] = frozenset(
-    {
-        "Cafam",
-        "Compensar",
-        "Colsubsidio",
-        "Comfacundi",
-        "Comfaboy",
-        "Comfama",
-        "Comfenalco Antioquia",
-        "Comfamiliar Camacol",
-        "Cajacopi",
-        "Combarranquilla",
-        "Comfamiliar Atlántico",
-        "ComfaCauca",
-        "Comfachocó",
-        "Comfacor",
-        "Comfamiliar Cartagena y Bolívar",
-        "Comfamiliares",
-        "Comfacesar",
-        "ComfaGuajira",
-        "Cajamag",
-        "Cofrem",
-        "Comfamiliar Huila",
-        "Comfamiliar Nariño",
-        "Comfenalco Quindío",
-        "Comfamiliar Risaralda",
-        "Comfenalco Santander",
-        "Cajasan",
-        "Cafaba",
-        "ComfaOriente",
-        "Comfasucre",
-        "Comfatolima",
-        "Comfenalco Valle",
-        "Comfandi",
-        "ComfaUnión",
-        "Comfiar",
-        "Comfacasanare",
-        "Comfaca",
-        "Comfaputumayo",
-        "Comcaja",
-        "Cajasai",
-        "Comfamiliar Guajira",
-        "Comfamiliar Amazonas*",
-        "Comfamar",
-    }
-)
-
-# Accepted values for the DEPRECATED v1 `otra_caja_compensacion` string: a caja
-# name, `ninguna`, or NULL. Kept only alongside `CAJA_COMPENSACION` above for
-# the same reason; unused by the v2 boolean `otra_caja_compensacion`.
-CAJA_COMPENSACION_OR_NINGUNA: Final[frozenset[str]] = CAJA_COMPENSACION | {"ninguna"}
+# ── Caja de compensación vocabulary — DELETED by the graph-topology migration
+# (docs/v2-impact-analysis.md §5). The 43-name `CAJA_COMPENSACION` vocabulary
+# and its `CAJA_COMPENSACION_OR_NINGUNA` companion, kept in this module by
+# step 1 only so `app/graph/nodes/_validators.py` and `app/prompts/slices.py`
+# kept importing, are removed together with their last call sites in this
+# change: the caja-name question is replaced by the `interes_afiliacion`
+# boolean derivation above.

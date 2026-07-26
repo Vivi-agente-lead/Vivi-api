@@ -49,6 +49,13 @@ __all__ = [
 # The named parameters of `save_lead`. A profile key outside this set is graph
 # bookkeeping (`afiliado_record`, `tiene_pareja`, `es_empleado`, …) and is never
 # mirrored to the `leads` row.
+#
+# v2 migration (``docs/v2-impact-analysis.md``): removes `antiguedad_laboral`,
+# `total_ingresos_familiares_mensuales`, `condicion_discapacidad_familiar` and
+# `cabeza_de_hogar` (fields no longer collected); adds `gastos_mensuales`,
+# `interes_afiliacion` and `preferencia_vis`. `tiene_creditos_activos` is also
+# no longer collected (neither the v2 flow diagram nor the v2 workbook carries
+# this question) but the column and the scorer's dormant `-5` rule stay.
 SAVE_LEAD_FIELDS: frozenset[str] = frozenset(
     {
         "tipo_documento",
@@ -62,15 +69,13 @@ SAVE_LEAD_FIELDS: frozenset[str] = frozenset(
         "contrato_laboral",
         "rango_salarial",
         "total_ingresos_mensuales",
-        "total_ingresos_familiares_mensuales",
-        "antiguedad_laboral",
+        "gastos_mensuales",
         "tiene_vivienda_propia",
         "ahorros_o_cesantias",
-        "condicion_discapacidad_familiar",
         "numero_pac",
-        "tiene_creditos_activos",
         "subsidio_vivienda_anterior",
-        "cabeza_de_hogar",
+        "interes_afiliacion",
+        "preferencia_vis",
         "lugar_eleccion_vivir",
         "municipio_normalizado",
         "tiempo_compra_deseado",

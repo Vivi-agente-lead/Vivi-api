@@ -214,12 +214,23 @@ transitions" scenario).
 - WHEN the scorer runs
 - THEN `classification='no_calificado'`
 
-#### Scenario: Red flag — vivienda propia pursuing VIS
+#### Scenario: Red flag — vivienda propia pursuing VIS [MODIFIED — graph-topology migration]
 
-- GIVEN a lead with `tiene_vivienda_propia=true` and `vis_recommended=true`
+> Amends the v1 "vivienda propia pursuing VIS" scenario: `preferencia_vis`, a
+> field v2 collects directly, now takes priority over the derived
+> `vis_recommended` when present (decided, `docs/v2-impact-analysis.md` §4,
+> §12 "The VIS red flag").
+
+- GIVEN a lead with `tiene_vivienda_propia=true` and `preferencia_vis` in {`vis`, `ambas`}
 - WHEN the scorer runs
-- THEN the score subtracts 15
-- GIVEN `vis_recommended=false` or NULL
+- THEN the score subtracts 15, regardless of the derived `vis_recommended` value
+- GIVEN a lead with `tiene_vivienda_propia=true` and `preferencia_vis='no_vis'`
+- WHEN the scorer runs
+- THEN no deduction is applied, even if `vis_recommended=true` — the stated preference suppresses the derived one
+- GIVEN a lead with `tiene_vivienda_propia=true`, `preferencia_vis` NULL (not collected — the graph-topology migration's linear qualification flow does not yet ask it; see `leads-conversational-flow`), and `vis_recommended=true`
+- WHEN the scorer runs
+- THEN the score subtracts 15 — the fallback to the derived value applies only when `preferencia_vis` was never collected
+- GIVEN `preferencia_vis` NULL and `vis_recommended=false` or NULL
 - WHEN the scorer runs
 - THEN no deduction is applied
 
