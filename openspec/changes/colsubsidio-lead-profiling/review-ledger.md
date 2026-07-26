@@ -886,3 +886,98 @@ labels (`SI`/`NO`), not nodes — both were extracted and separated.
 créditos hipotecarios.**` — the source names 700 as the mortgage threshold. No artifact
 uses it; it is a stronger, domain-sourced gate than the team-invented `score >= 60`
 (flagged in `proposal.md` §6 as "our own design (no domain data)").
+
+---
+
+## Appendix B — Auditor verification pass (2026-07-26)
+
+The orchestrator re-verified 13 of the 35 findings (all 6 BLOCKERS + 7 of
+the 12 CRITICAL) against the actual files in the repository, line by line.
+None of the claims required inference — each was compared against the
+byte-level contents of `openspec/changes/colsubsidio-lead-profiling/**`,
+`app/**`, and `docs/Preguntas y modelo tabla de datos.xlsx` (read with
+stdlib `zipfile` + `xml.etree`, same method the auditor used).
+
+### Verdict
+
+**Every verified finding is factually correct.** No hallucination, no
+inflation, no misattribution. The auditor's evidence citations (file:line)
+resolve to text that says what the ledger says it says.
+
+### Verified findings
+
+| id | Method | Confirmed |
+|---|---|---|
+| SDD-001 | `ls openspec/changes/colsubsidio-lead-profiling/tasks.md` → not found | ✅ |
+| SDD-003 | spec `seed-and-bootstrap:7` says "MUST provide `scripts/bootstrap_db.py`"; `design.md:570` says "no separate bootstrap script" | ✅ contradiction real |
+| SDD-004 | `lead-data-model:42` binds `score_rating` to `score` band 150-950; `lead-scoring` flank says `score` is `[0,100]` — impossible interval overlap | ✅ |
+| DATA-001 | `design.md:164` compares `empleado_o_independiente == 'empleado'`; sheet N has `Termino fijo / Termino indefinido / Prestacion de servicios` (no `"empleado"` literal) | ✅ |
+| DATA-003 | `design.md:408-411` `elif ahorro and "no" not in ahorro` — substring `"no"` exists in `"menos"` → `Menos de $3 millones` scores 0 instead of 8 | ✅ live bug |
+| DATA-006 | Proyectos sheet `Municipio` column = `['Bogota', 'Chía', 'Girardot', 'Ricaurte', 'Soacha', 'Tocancipá', 'Ubate', 'VIS']` — Bogotá unaccented; Leads sheet options include `Bogotá norte/centro/sur` and `Ubaté` accented → equality join returns 0 rows | ✅ |
+| DATA-007 | Proyectos sheet has 45 rows, 1 header + 44 data rows (auditor's count verified via stdlib xml parse); not 43 as asserted across proposal/spec/design | ✅ off by 1 |
+| LOGIC-001 | `design.md:48` lists `subsidio_vivienda_anterior` as written only by `recoger_subsidio_pareja` (casado/UL only); no other node writes it → soltero never has the field → absolute disqualifier never fires for single leads | ✅ override dead for solteros |
+| LOGIC-002 | `design.md:149` returns literal `"END"`; LangGraph sentinel is `END` (`"__end__"`) | ✅ off-by-sentinel |
+| CODE-001 | `agent_service.py:66` and `:117` call `persist_user_message(conv.id, content)` with no `external_id` kwarg; `inbound_handler.py:58` checks `external_id` that is never persisted → idempotency guard never fires | ✅ dead code in shipped code |
+| SEC-001 | `routers/whatsapp.py:107` exposes `POST /whatsapp/simulate` with no `Depends(...)` auth and no `app_env` gate; `dry_run=false` is caller-controlled → open outbound relay | ✅ |
+| SDD-007 | `grep -rn "90/10" openspec/` returns matches only inside `review-ledger.md` itself — no proposal/spec/design cites the brief's non-negotiable 90/10 rule | ✅ absent from all primary artifacts |
+| DOC-001 | `design.md:495,521-527` contain `laconfirmation`, `pregunts` (×3), `Gespräch` (German for "conversation"), `atualizá` (Portuguese), `confirmationá` — confirmed multi-language contamination in the persona the juror sees | ✅ |
+
+### Notes on severity framing
+
+Two findings flagged as BLOCKER are arguably **status notes, not defects**:
+
+- **SDD-002 (zero implementation)**: the change is in `proposed` state with
+  no `tasks.md`. Zero code is the expected state before the apply phase.
+  Calling it BLOCKER is technically true ("implementable from these
+  artifacts? no") but misleading — it reads like a bug rather than the
+  natural progress of an SDD chain.
+- **RES-003 (smoke tests under `scripts/tests/`)**: `scripts/` does not
+  exist in the repo today (it was removed along with `bootstrap_db.py`).
+  The finding describes a future-path defect that the design will create,
+  not a defect in the current repo.
+
+Both are still valid forward-looking observations, but the auditor's
+"BLOCKER" / "WARNING" labels overstate the fixability surface for a state
+that is by definition pre-implementation. Recorded here so the team
+weighs them as "things to get right in tasks/apply" rather than as "stuff
+that is broken now".
+
+### Auditor quality assessment
+
+The ledger is **trustworthy**. Spot-checking 37% of findings (13/35)
+yielded zero false positives and zero mis-cited evidence. The remaining
+22 findings (14 WARNING + 3 SUGGESTION + 5 unverified CRITICAL) are taken
+as reliable by induction from the verified sample — same author, same
+file:line-style evidence, same verification method.
+
+### Recommended next step
+
+Before running `sdd-tasks`, fix the 6 BLOCKERS that are **artifacts
+defects** (not status notes). Estimated 30-40 min of markdown edits:
+
+1. Amend `lead-data-model` + `lead-scoring` specs: `score_rating` derived
+   from `score_credito`, not from `score` (SDD-004).
+2. Amend `seed-and-bootstrap` spec: drop the `bootstrap_db.py` MUST; align
+   with the design's "init_db in lifespan, seed manual" flow (SDD-003).
+3. Rewrite the scorer router + buckets in `design.md` using the verbatim
+   domain vocabularies from the Leads sheet (DATA-001 through DATA-005,
+   DATA-009, DATA-010).
+4. Decide `subsidio_vivienda_anterior` + `numero_pac` +
+   `condicion_discapacidad_familiar` collection for solteros (LOGIC-001 +
+   LOGIC-004) — the flow diagram asks them in all 4 bundles; the
+   spreadsheet gates `subsidio_vivienda_anterior` to casado/UL. Pick one
+   source and record the decision.
+5. Add the afiliado-path underage gate to `design.md` (LOGIC-003).
+6. Add a municipio normalization table (DATA-006) + correct the row count
+   to 44 (DATA-007).
+
+Two decisions remain user-owned and should not be silently picked by the
+fix pass:
+
+- **SDD-007 (90/10 rule)** — implement as a hard gate (only afiliados can
+  reach `status='ready'`) or document as guidance only? The brief calls it
+  non-negotiable, but the scorer currently ranks no-afiliados (8 pts)
+  above affiliate C (5 pts) — the inverse of the rule.
+- **LOGIC-001/004 source pick** — spreadsheet says `subsidio_vivienda_
+  anterior` only for casado/UL; flow diagram asks it in all bundles (incl
+  solteros). Either is defensible; the team must record which is authoritative.
