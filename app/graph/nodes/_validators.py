@@ -41,6 +41,7 @@ __all__ = [
     "parse_numero_documento",
     "parse_nombre",
     "parse_free_text",
+    "parse_menu_opcion",
 ]
 
 _MIN_DOC_DIGITS: Final[int] = 6
@@ -312,3 +313,26 @@ def parse_free_text(raw: str | None, *, max_length: int = 2000) -> str | None:
     if not text:
         return None
     return text[:max_length]
+
+
+# ── Catalogue-entry menu (Block B, ``docs/v2-impact-analysis.md`` §1, §8) ────
+# Not an enumerated `leads` column — pure graph-navigation state, so it is kept
+# local to this module instead of `domain_normalizer.py` (out of scope for
+# this work unit; see the apply report).
+_MENU_OPCION_SLUGS: Final[dict[str, str]] = {
+    "quiero saber mas de este proyecto": "ver_detalle",
+    "quiero ver otro proyecto.": "ver_otro_proyecto",
+    "quiero ver otro proyecto": "ver_otro_proyecto",
+    "salir": "salir",
+}
+
+
+def parse_menu_opcion(raw: str | None) -> str | None:
+    """The entry-menu option the lead picked, or `None` outside the domain.
+
+    Exact match after `fold`, same discipline as every other enumerated
+    field: never guesses, never substring-matches.
+    """
+    if raw is None:
+        return None
+    return _MENU_OPCION_SLUGS.get(fold(raw))

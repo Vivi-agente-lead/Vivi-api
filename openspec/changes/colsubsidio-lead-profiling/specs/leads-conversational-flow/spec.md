@@ -8,6 +8,8 @@ The system MUST drive Colsubsidio lead profiling through a structured state grap
 
 **v2 graph-topology migration (`docs/v2-impact-analysis.md`)**: the four v1 capacity bundles (`cap_emp_con_pareja` · `cap_emp_sin_pareja` · `cap_ind_con_pareja` · `cap_ind_sin_pareja`) and the `_route_capacity` predicate that selected among them by two derived predicates (`es_empleado`, `tiene_pareja`) are DELETED. v2 asks one household capacity block of every lead — employed or not, partnered or not — so `tiene_pareja` and `es_empleado` stop being routing predicates (both are still derived, bookkeeping only). `recoger_otra_caja` (the v1 caja-name prompt) is likewise deleted; `recoger_interes_afiliacion` replaces it, reachable only from the no-afiliado age gate.
 
+**Block B (entry inversion + catalogue browsing, `docs/v2-impact-analysis.md` §1, §8)**: `start` no longer routes straight to `autorizacion_datos`. It routes to `menu_proyecto` first — the catalogue-first welcome + three-way menu — which then routes to `autorizacion_datos` (`Quiero saber más de este proyecto`, or "no volver" out of the browsing loop), to the browsing loop `elegir_preferencia_vis → elegir_municipio_catalogo → mostrar_catalogo` (`Quiero ver otro proyecto.`), or to a farewell (`Salir`). See the entry-menu and browsing-loop scenarios below.
+
 #### Scenario: Happy path afiliado reaches Calificado
 
 - GIVEN an inbound WhatsApp message starts a new conversation and a mock afiliado exists with the cedula the user will provide
@@ -135,6 +137,46 @@ The system MUST drive Colsubsidio lead profiling through a structured state grap
 - WHEN a code search is performed for WhatsApp/Meta specific tokens
 - THEN zero references appear in the graph, tools (excluding tool wiring that fetches conversation_id from ToolContext), and scorer modules
 - AND only `InboundMessageHandler` and `WhatsAppClient` modules reference Meta/WhatsApp
+- AND this holds for the Block B entry-menu/catalogue-browsing machinery too (`app/graph/nodes/browsing.py`, `app/graph/router.py`'s `_route_menu` / `_route_volver_menu`): the stateful menu and its back-navigation are graph state (`lead_profile["menu_opcion"]`, `lead_profile["volver_menu_anterior"]`), never a channel-specific concept
+
+#### Scenario: Entry inversion — a project is already in hand at the start
+
+- GIVEN a brand-new conversation with no prior `lead_profile`
+- WHEN the graph's first node (`menu_proyecto`) runs
+- THEN it sources a real `proyectos_colsubsidio` row through the existing `get_projects` tool (never a hardcoded project) and interpolates it into the v2 diagram's welcome line, then asks `menu_opcion` with exactly three options: `Quiero saber más de este proyecto`, `Quiero ver otro proyecto.`, `Salir`
+- GIVEN the catalogue is empty (nothing seeded)
+- WHEN `menu_proyecto` runs
+- THEN it degrades to a generic welcome instead of crashing or inventing a project name
+
+#### Scenario: The three entry-menu branches
+
+- GIVEN a lead answers `Quiero saber más de este proyecto`
+- WHEN the graph routes the answer
+- THEN it converges on `autorizacion_datos` — the same qualification flow Block A ships
+- GIVEN a lead answers `Salir`
+- WHEN the graph routes the answer
+- THEN it sends a single cordial farewell and terminates, with no `leads` row created
+- GIVEN a lead answers `Quiero ver otro proyecto.`
+- WHEN the graph routes the answer
+- THEN it enters the catalogue-browsing loop: `elegir_preferencia_vis` → `elegir_municipio_catalogo` → `mostrar_catalogo`
+
+#### Scenario: The catalogue-browsing loop collects preferencia_vis and lugar_eleccion_vivir up front
+
+- GIVEN a lead on the browsing branch
+- WHEN `elegir_preferencia_vis` and `elegir_municipio_catalogo` run
+- THEN `preferencia_vis` and `lugar_eleccion_vivir` (with its `municipio_normalizado` join key) are collected and persisted before qualification starts
+- AND when that same lead later reaches `recoger_intencion`, it is NOT asked either field again — `recoger_intencion`'s existing "already answered" skip is sufficient, no special-case code is needed
+- AND `get_projects` MUST be called with `municipio_normalizado` (never the raw `lugar_eleccion_vivir`) and a `tipo` derived from `preferencia_vis`, per `agent-tools`
+
+#### Scenario: Back-navigation loops to the municipio question, not the top menu
+
+- GIVEN a lead has just seen the catalogue for a municipio and answers `Sí` to "¿quieres volver a elegir zona o tipo de vivienda?"
+- WHEN the graph routes the answer
+- THEN it re-asks `lugar_eleccion_vivir` (`elegir_municipio_catalogo`), NOT the top-level `menu_opcion` — the v2 diagram's `El usuario selecciona volver al menu anterior` loops to the municipio question
+- AND `preferencia_vis` is NOT re-asked on a loop iteration
+- GIVEN the lead instead answers `No`
+- WHEN the graph routes the answer
+- THEN it converges on `autorizacion_datos`, carrying the chosen `preferencia_vis` and `municipio_normalizado` forward
 
 ### Requirement: Documented Deviations From the Source Flow Diagram
 
@@ -144,9 +186,10 @@ The system MUST drive Colsubsidio lead profiling through a structured state grap
 
 - GIVEN the v2 source flow diagram
 - WHEN the implementation is compared against it
-- THEN the following v2 surface is recorded as out of scope for Block A, with a reason: the catalogue-first entry inversion (`Bienvenido(a)…` → `Para continuar elige una opcion:` → `Quiero saber más de este proyecto` / `Quiero ver otro proyecto.` / `Salir`), the project-browsing loop with back-navigation (`Preguntar: ¿Te interesan vivienda VIS, NO VIS o ambas?` → municipio → `Mostrar menu de proyectos disponibles…` → `El usuario selecciona volver al menu anterior`), `¿Te conecto con un asesor de crédito?`, and `Enviar notificación por correo` — all deferred to a later work unit (Block B / Block C) because they are new stateful surface, not a field-level correction
-- AND `lugar_eleccion_vivir` stays collected in `recoger_intencion`, at the end of the flow, rather than moving to the front as the v2 diagram's entry inversion implies — a deliberate interim placement for Block A, since the linear flow this change ships has no project-selection front-end yet
-- AND `preferencia_vis` is a real, normalized domain (`app/models/constants.py`, `app/services/domain_normalizer.py`) and its scorer wiring is live (`lead-scoring`), but no node in Block A's linear flow collects it — the v2 diagram places that question only inside the project-browsing loop, which Block A does not build; a lead's `preferencia_vis` is therefore always NULL until that loop ships, and the `-15` red flag falls back to the derived `vis_recommended`
+- THEN the catalogue-first entry inversion and the project-browsing loop with back-navigation are no longer omissions — **Block B implements both** (see the *Entry inversion*, *entry-menu branches*, *browsing loop* and *back-navigation* scenarios above): `Bienvenido(a)…` → `Para continuar elige una opcion:` → `Quiero saber más de este proyecto` / `Quiero ver otro proyecto.` / `Salir`, and `Preguntar: ¿Te interesan vivienda VIS, NO VIS o ambas?` → municipio → `Mostrar menu de proyectos disponibles…` → `El usuario selecciona volver al menu anterior`
+- AND `¿Te conecto con un asesor de crédito?` and `Enviar notificación por correo` remain out of scope for Block B, implemented instead by Block C (a separate work unit; see that block's report for its own scope note)
+- AND `lugar_eleccion_vivir` and `preferencia_vis` now move to the front for a lead who browses the catalogue (Block B's `elegir_preferencia_vis` / `elegir_municipio_catalogo`) — the interim Block A placement (collected only in `recoger_intencion`, at the end) still applies to a lead who instead answers `Quiero saber más de este proyecto` directly, which is a real branch this graph supports, not a residual gap
+- AND `preferencia_vis`'s scorer wiring (`lead-scoring`) was live since Block A but had no collecting node until Block B's `elegir_preferencia_vis`; a lead who never browses the catalogue still has `preferencia_vis=NULL` and the `-15` red flag still falls back to the derived `vis_recommended` for that lead, which is the documented Block A behavior, unchanged for that branch
 
 #### Scenario: Reassurance message before the capacity block
 

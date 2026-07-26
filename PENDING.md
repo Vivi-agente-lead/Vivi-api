@@ -113,17 +113,21 @@ An answer outside the synonym table still triggers a re-ask.
 ## 10. v2 migration — Blocks B and C
 
 Block A landed (`feat/v2-graph-topology`): the qualification flow is v2-correct and
-the suite is green at 325 passed / 3 skipped. Two blocks remain, both upside
-rather than corrections.
+the suite was green at 325 passed / 3 skipped.
 
-**Block B — entry inversion and the catalogue loop.** v2 opens with a project
-already in hand, then `Para continuar elige una opcion:` branching to
-`Quiero saber más de este proyecto` (qualification), `Quiero ver otro proyecto.`
-(VIS preference → municipio → project menu → back-navigation) and `Salir`. This
-moves `lugar_eleccion_vivir` and `preferencia_vis` to the front and stops
-`get_projects` being READY-only — `specs/agent-tools/spec.md` makes that a MUST
-today and must be amended, not contradicted in code. New surface: the graph has
-no concept of a stateful menu with back-navigation.
+**Block B — entry inversion and the catalogue loop. DONE** (`feat/v2-blocks-bc`).
+`app/graph/nodes/browsing.py` adds `menu_proyecto` (catalogue-first welcome,
+sourced from a real `proyectos_colsubsidio` row via `get_projects`, never
+hardcoded), `salir_menu`, `elegir_preferencia_vis`, `elegir_municipio_catalogo`
+and `mostrar_catalogo` (the back-navigation loop). `lugar_eleccion_vivir` and
+`preferencia_vis` move to the front for a lead who browses the catalogue;
+`recoger_intencion`'s existing "already answered" skip means neither is asked
+twice. `get_projects` is no longer READY/Calificado-only —
+`specs/agent-tools/spec.md`'s scenario was amended (not contradicted) to
+narrow the MUST to "`handoff` itself must not call it for a non-Calificado
+lead". New router predicates `_route_menu` / `_route_volver_menu`
+(`app/graph/router.py`) hold the stateful menu + back-navigation, entirely in
+the graph — no WhatsApp/Meta reference. Suite: 344 passed / 3 skipped.
 
 **Block C — two capabilities with no code behind them.**
 `¿Te conecto con un asesor de crédito?` (a second hand-off, distinct from the

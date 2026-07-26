@@ -111,7 +111,14 @@ async def test_a_rebuilt_profile_resumes_the_graph_without_re_asking(
     )
 
     first = Conversation()
-    for reply in ("Hola", "Sí", "Cédula de ciudadanía", "1010101010", "Casado"):
+    for reply in (
+        "Hola",
+        "Quiero saber más de este proyecto",
+        "Sí",
+        "Cédula de ciudadanía",
+        "1010101010",
+        "Casado",
+    ):
         await first.say(reply)
     assert first.awaiting == "contrato_laboral"
 

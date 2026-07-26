@@ -23,6 +23,13 @@ from langgraph.graph import END, START, StateGraph
 
 from app.core.config import settings
 from app.core.exceptions import ServiceUnavailableError
+from app.graph.nodes.browsing import (
+    elegir_municipio_catalogo,
+    elegir_preferencia_vis,
+    menu_proyecto,
+    mostrar_catalogo,
+    salir_menu,
+)
 from app.graph.nodes.capacity import recoger_capacidad, recoger_empleo
 from app.graph.nodes.closing import handoff, recoger_intencion, scoring
 from app.graph.nodes.collect import (
@@ -36,7 +43,13 @@ from app.graph.nodes.spine import (
     pedir_cedula,
     start,
 )
-from app.graph.router import _route_afiliado, _route_autorizacion, _route_edad
+from app.graph.router import (
+    _route_afiliado,
+    _route_autorizacion,
+    _route_edad,
+    _route_menu,
+    _route_volver_menu,
+)
 from app.graph.state import AgentState
 from app.graph.turn_gate import turn_gated
 from app.services.checkpointer_factory import build_checkpointer
@@ -53,8 +66,18 @@ DEFAULT_ROLE = "agent"
 # graph-topology migration). The four v1 capacity bundles and
 # `recoger_otra_caja` collapse into `recoger_capacidad` and
 # `recoger_interes_afiliacion` respectively — see those modules' docstrings.
+#
+# Block B (entry inversion + catalogue browsing, `app/graph/nodes/browsing.py`)
+# inserts `menu_proyecto` / `salir_menu` / `elegir_preferencia_vis` /
+# `elegir_municipio_catalogo` / `mostrar_catalogo` between `start` and
+# `autorizacion_datos`.
 NODES: dict[str, Any] = {
     "start": start,
+    "menu_proyecto": menu_proyecto,
+    "salir_menu": salir_menu,
+    "elegir_preferencia_vis": elegir_preferencia_vis,
+    "elegir_municipio_catalogo": elegir_municipio_catalogo,
+    "mostrar_catalogo": mostrar_catalogo,
     "autorizacion_datos": autorizacion_datos,
     "pedir_cedula": pedir_cedula,
     "afiliado_check": afiliado_check,
@@ -81,7 +104,19 @@ def build_lead_profiler() -> StateGraph:
         graph.add_node(name, fn)
 
     graph.add_edge(START, "start")
-    graph.add_conditional_edges("start", turn_gated("autorizacion_datos"))
+    # Block B: entry inversion. `start` no longer routes straight into consent —
+    # every conversation opens on the catalogue-first welcome + menu, which
+    # `_route_menu` then sends into qualification, the browsing loop, or exit.
+    graph.add_conditional_edges("start", turn_gated("menu_proyecto"))
+    graph.add_conditional_edges("menu_proyecto", turn_gated(_route_menu))
+    graph.add_edge("salir_menu", END)
+    graph.add_conditional_edges(
+        "elegir_preferencia_vis", turn_gated("elegir_municipio_catalogo")
+    )
+    graph.add_conditional_edges(
+        "elegir_municipio_catalogo", turn_gated("mostrar_catalogo")
+    )
+    graph.add_conditional_edges("mostrar_catalogo", turn_gated(_route_volver_menu))
     graph.add_conditional_edges("autorizacion_datos", turn_gated(_route_autorizacion))
     graph.add_conditional_edges("pedir_cedula", turn_gated("afiliado_check"))
     graph.add_conditional_edges("afiliado_check", turn_gated(_route_afiliado))

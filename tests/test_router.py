@@ -35,6 +35,8 @@ from app.graph.router import (
     _route_afiliado,
     _route_autorizacion,
     _route_edad,
+    _route_menu,
+    _route_volver_menu,
 )
 
 # Every destination any predicate under test can return.
@@ -43,6 +45,10 @@ _DESTINATIONS: tuple[str, ...] = (
     "recoger_identidad",
     "recoger_interes_afiliacion",
     "recoger_estado_civil",
+    "autorizacion_datos",
+    "elegir_preferencia_vis",
+    "salir_menu",
+    "elegir_municipio_catalogo",
 )
 
 
@@ -170,6 +176,37 @@ async def test_route_edad_traversal(profile, expected, caplog):
 
 def test_route_edad_unknown_age_returns_the_imported_sentinel():
     assert _route_edad({"lead_profile": {}}) is END
+
+
+# ── Block B: entry-menu + back-navigation ───────────────────────────────────
+@pytest.mark.parametrize(
+    ("profile", "expected"),
+    [
+        ({"menu_opcion": "ver_detalle"}, ["source", "autorizacion_datos"]),
+        ({"menu_opcion": "ver_otro_proyecto"}, ["source", "elegir_preferencia_vis"]),
+        ({"menu_opcion": "salir"}, ["source", "salir_menu"]),
+        ({}, ["source", "autorizacion_datos"]),
+    ],
+    ids=["ver_detalle", "ver_otro_proyecto", "salir", "sin_respuesta"],
+)
+async def test_route_menu_traversal(profile, expected, caplog):
+    assert await _traverse(_route_menu, profile, caplog) == expected
+
+
+@pytest.mark.parametrize(
+    ("profile", "expected"),
+    [
+        (
+            {"volver_menu_anterior": True},
+            ["source", "elegir_municipio_catalogo"],
+        ),
+        ({"volver_menu_anterior": False}, ["source", "autorizacion_datos"]),
+        ({}, ["source", "autorizacion_datos"]),
+    ],
+    ids=["vuelve", "no_vuelve", "sin_respuesta"],
+)
+async def test_route_volver_menu_traversal(profile, expected, caplog):
+    assert await _traverse(_route_volver_menu, profile, caplog) == expected
 
 
 # ── Derived predicates (bookkeeping only — no longer routing) ───────────────

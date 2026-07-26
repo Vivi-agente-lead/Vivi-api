@@ -102,6 +102,11 @@ async def rebuild_lead_profile(
 
     # The row only exists because consent was granted before it was created.
     profile["autorizacion_datos"] = True
+    # Block B (`app/graph/nodes/browsing.py`): the entry-menu question is moot
+    # for a lead already past `autorizacion_datos` — restoring it as
+    # `"ver_detalle"` keeps `menu_proyecto` a silent pass-through on resume
+    # instead of re-showing the welcome menu to someone already mid-flow.
+    profile["menu_opcion"] = "ver_detalle"
 
     profile["tiene_pareja"] = derive_tiene_pareja(profile.get("estado_civil"))
     profile["es_empleado"] = derive_es_empleado(profile.get("contrato_laboral"))
