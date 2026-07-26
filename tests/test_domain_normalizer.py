@@ -16,8 +16,10 @@ from __future__ import annotations
 import pytest
 
 from app.services.domain_normalizer import (
+    BOOLEAN_FIELDS,
     MUNICIPIO_CATALOGO_REPAIR,
     normalize,
+    normalize_bool,
     normalize_municipio,
     repair_catalogo_municipio,
 )
@@ -218,6 +220,77 @@ def test_never_substring_matches():
     assert normalize("ahorros_o_cesantias", "no") is None
     assert normalize("ahorros_o_cesantias", "ningun") is None
     assert normalize("contrato_laboral", "fijo") is None
+
+
+# ── boolean domain (D1 regression) ─────────────────────────────────────────
+# The `Leads` sheet stores its yes/no columns as the literals `SI` / `NO`
+# (`¿Usted o su pareja han recibido anteriormente un subsidio de vivienda?`,
+# `Tiene vivienda propia`, `¿Tiene créditos activos actualmente?`,
+# `Condición de discapcidad en grupo familiar`). Before this regression guard
+# the normalizer had no boolean domain at all, so `'SI'` reached the scorer
+# verbatim, failed its `is True` test, and the absolute subsidio-previo
+# disqualifier silently did not fire.
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("SI", True),
+        ("Si", True),
+        ("si", True),
+        ("Sí", True),
+        ("SÍ", True),
+        ("NO", False),
+        ("no", False),
+        ("No", False),
+        ("true", True),
+        ("True", True),
+        ("false", False),
+        ("FALSE", False),
+        ("verdadero", True),
+        ("falso", False),
+        ("1", True),
+        ("0", False),
+        (True, True),
+        (False, False),
+        (1, True),
+        (0, False),
+        ("  SI  ", True),
+    ],
+)
+def test_normalize_bool_workbook_vocabulary(raw, expected):
+    assert normalize_bool(raw) is expected
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ["tal vez", "quizás", "", "   ", "sí, claro", "n/a", "2", 2, 1.5],
+)
+def test_normalize_bool_unrecognized_fails_closed(raw):
+    """Unrecognized → None (never a silent False), per *Unrecognized value
+    fails closed*."""
+    assert normalize_bool(raw) is None
+
+
+def test_normalize_bool_none_returns_none():
+    assert normalize_bool(None) is None
+
+
+def test_boolean_fields_are_routed_through_normalize():
+    """Every boolean lead column resolves through the generic `normalize`."""
+    assert BOOLEAN_FIELDS == frozenset(
+        {
+            "subsidio_vivienda_anterior",
+            "tiene_vivienda_propia",
+            "tiene_creditos_activos",
+            "condicion_discapacidad_familiar",
+            "afiliado_colsubsidio",
+            "cabeza_de_hogar",
+        }
+    )
+    for field in BOOLEAN_FIELDS:
+        assert normalize(field, "SI") is True
+        assert normalize(field, "NO") is False
+        assert normalize(field, "tal vez") is None
+        assert normalize(field, None) is None
 
 
 # ── municipio normalization (9 lead-facing options) ────────────────────────

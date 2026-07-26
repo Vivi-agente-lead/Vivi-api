@@ -403,6 +403,57 @@ def test_case_12_afiliado_strictly_outscores_no_afiliado() -> None:
     assert afiliado_class == "ready"
 
 
+# ── D1 regression: workbook `SI`/`NO` booleans reach the scorer normalized ──
+# The `Leads` sheet stores its yes/no columns as the literals `SI` / `NO`. The
+# scorer tests `is True`, so an un-normalized `'SI'` silently disabled every
+# boolean rule — including the absolute subsidio-previo disqualifier, which
+# scored `'SI'` as `ready`. Booleans are now routed through
+# `domain_normalizer.normalize_bool` at the scorer boundary.
+def test_regression_d1_workbook_si_no_booleans_are_normalized() -> None:
+    afiliado = _afiliado("A", 880)
+
+    # Absolute disqualifier fires on the workbook's own vocabulary.
+    score, _, classification, reasoning = score_lead(
+        _ready_lead(subsidio_vivienda_anterior="SI"), afiliado
+    )
+    assert classification == "nurture"
+    assert score == 100  # the override never subtracts
+    assert (
+        "Subsidio de vivienda previo otorgado — no califica para nuevo subsidio"
+        in reasoning
+    )
+    # …and on the accented / lowercase variants.
+    for si in ("Sí", "si", "SÍ", "true", True):
+        assert score_lead(_ready_lead(subsidio_vivienda_anterior=si), afiliado)[2] == (
+            "nurture"
+        )
+
+    # `NO` is a real negative, not a truthy string.
+    assert score_lead(_ready_lead(subsidio_vivienda_anterior="NO"), afiliado)[2] == (
+        "ready"
+    )
+
+    # Unrecognized fails closed: treated as absent, never as True.
+    assert score_lead(
+        _ready_lead(subsidio_vivienda_anterior="tal vez"), afiliado
+    )[2] == "ready"
+
+    # The other three workbook booleans drive their red flags from `SI` too.
+    baseline, _, _, _ = score_lead(_ready_lead(), afiliado)
+    creditos, _, _, _ = score_lead(_ready_lead(tiene_creditos_activos="SI"), afiliado)
+    assert creditos == baseline - 5
+
+    vis = build_scoring_result(
+        _ready_lead(tiene_vivienda_propia="SI", vis_recommended=True), afiliado
+    )
+    assert vis["breakdown"]["ajustes"] == -15
+
+    discapacidad = build_scoring_result(
+        _ready_lead(condicion_discapacidad_familiar="SI"), afiliado
+    )
+    assert discapacidad["breakdown"]["ajustes"] == 8
+
+
 # ── Credit bands verifier: bands, NULL, simulate, demo cedulas ─────────────
 # Confirm the band table matches the source workbook legend
 # (`Afiliados Colsubsidio` R3:R8) and `design.md` §7.3 verbatim.

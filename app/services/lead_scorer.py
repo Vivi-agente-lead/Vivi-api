@@ -28,6 +28,7 @@ from __future__ import annotations
 from typing import Any, Mapping, TypedDict
 
 from app.services.credit_bands import band_from_score_credito, simulate_bureau_cedula
+from app.services.domain_normalizer import normalize_bool
 
 __all__ = [
     "READY_THRESHOLD_AFILIADO",
@@ -117,6 +118,18 @@ def _get(profile: Mapping[str, Any] | None, key: str, default: Any = None) -> An
     return profile.get(key, default)
 
 
+def _flag(profile: Mapping[str, Any] | None, key: str) -> bool | None:
+    """Read a boolean lead field through the domain normalizer.
+
+    The workbook stores its yes/no columns as the literals ``SI`` / ``NO``, and
+    an LLM may echo either those or a real ``bool``. Routing every boolean read
+    through :func:`normalize_bool` keeps the scorer's ``is True`` tests keyed
+    off one vocabulary. An unrecognized value yields ``None`` (fail closed) —
+    it is treated as absent, never as a silent ``False``.
+    """
+    return normalize_bool(_get(profile, key))
+
+
 def score_lead(
     lead: Mapping[str, Any] | None,
     afiliado: Mapping[str, Any] | None = None,
@@ -178,17 +191,21 @@ def score_lead(
         )
 
     # ── Red flags (additive, applied to the sum, then clamped) ───────────────
+    # Every lead-supplied boolean is read through the normalizer (`_flag`), so
+    # the workbook's `SI`/`NO` literals drive these rules. `vis_recommended` is
+    # derived by the scoring node's project lookup, never collected, so it is
+    # already a real bool.
     vis_flag = (
         _get(lead, "vis_recommended") is True
-        and _get(lead, "tiene_vivienda_propia") is True
+        and _flag(lead, "tiene_vivienda_propia") is True
     )
     red = 0
     if vis_flag:
         red -= 15
-    if _get(lead, "tiene_creditos_activos") is True:
+    if _flag(lead, "tiene_creditos_activos") is True:
         red -= 5
     if (
-        _get(lead, "condicion_discapacidad_familiar") is True
+        _flag(lead, "condicion_discapacidad_familiar") is True
         or (_get(lead, "numero_pac") or 0) > 0
     ):
         red += 8
@@ -208,7 +225,7 @@ def score_lead(
 
     # ── Classification ───────────────────────────────────────────────────────
     is_afiliado = bool(afiliado)
-    ha_recibido_subsidio = _get(lead, "subsidio_vivienda_anterior") is True
+    ha_recibido_subsidio = _flag(lead, "subsidio_vivienda_anterior") is True
     classification = classify_lead(score, is_afiliado, ha_recibido_subsidio)
 
     # ── Reasoning ────────────────────────────────────────────────────────────
@@ -294,15 +311,15 @@ def build_scoring_result(
 
     vis_flag = (
         _get(lead, "vis_recommended") is True
-        and _get(lead, "tiene_vivienda_propia") is True
+        and _flag(lead, "tiene_vivienda_propia") is True
     )
     red = 0
     if vis_flag:
         red -= 15
-    if _get(lead, "tiene_creditos_activos") is True:
+    if _flag(lead, "tiene_creditos_activos") is True:
         red -= 5
     if (
-        _get(lead, "condicion_discapacidad_familiar") is True
+        _flag(lead, "condicion_discapacidad_familiar") is True
         or (_get(lead, "numero_pac") or 0) > 0
     ):
         red += 8
