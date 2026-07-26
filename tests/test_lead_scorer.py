@@ -454,6 +454,33 @@ def test_regression_d1_workbook_si_no_booleans_are_normalized() -> None:
     assert discapacidad["breakdown"]["ajustes"] == 8
 
 
+# ── D2 regression: an afiliado with NULL score_credito is not fabricated ────
+# Bucket 1 guarded the afiliado branch with `score_credito is not None`, so an
+# afiliado whose credit score is missing fell through to the *no-afiliado*
+# cedula bureau simulation of their own document number — inventing an
+# Excelente band and mislabelling the reasoning as "simulado bureau". Spec
+# Bucket 1: a NULL score_credito contributes 0 and yields rating_label="Malo";
+# the simulation is for no-afiliado leads only.
+def test_regression_d2_afiliado_without_score_credito_is_malo() -> None:
+    lead = _ready_lead(numero_documento="1010101010")
+    afiliado: AfiliadoRecord = {"categoria_afiliado": "A"}  # score_credito NULL
+
+    score, rating, classification, reasoning = score_lead(lead, afiliado)
+
+    assert rating == "Malo"
+    # No credit points; the afiliacion bucket and the rest still count.
+    # 0 (credito) + 15 (A) + 20 + 15 + 10 + 15 = 75
+    assert score == 75
+    assert classification == "ready"  # 75 >= 60, but on real points only
+    assert "simulado bureau" not in reasoning  # never claimed for an afiliado
+    assert "Credito: Malo (None) → 0/25" in reasoning
+    assert build_scoring_result(lead, afiliado)["breakdown"]["credito"] == 0
+
+    # Explicit None is the same as an absent key.
+    explicit_null: AfiliadoRecord = {"categoria_afiliado": "A", "score_credito": None}
+    assert score_lead(lead, explicit_null) == score_lead(lead, afiliado)
+
+
 # ── Credit bands verifier: bands, NULL, simulate, demo cedulas ─────────────
 # Confirm the band table matches the source workbook legend
 # (`Afiliados Colsubsidio` R3:R8) and `design.md` §7.3 verbatim.

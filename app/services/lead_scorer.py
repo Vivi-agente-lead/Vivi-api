@@ -152,8 +152,11 @@ def score_lead(
 
     # ── Bucket 1: Credito (max 25) ───────────────────────────────────────────
     # Afiliado's score_credito is the afiliado record's; no-afiliado's is
-    # cedula-derived from the bureau simulation.
-    if afiliado and afiliado.get("score_credito") is not None:
+    # cedula-derived from the bureau simulation. An afiliado whose
+    # score_credito is NULL stays on the afiliado branch and contributes 0 /
+    # "Malo" — falling through to the simulation would fabricate a credit band
+    # out of their own document number (spec Bucket 1).
+    if afiliado:
         score_credito = afiliado.get("score_credito")
         credit_pts, rating_label = band_from_score_credito(score_credito)
     else:
@@ -326,8 +329,8 @@ def build_scoring_result(
 
     breakdown: dict[str, int] = {
         "credito": band_from_score_credito(
-            (afiliado or {}).get("score_credito")
-            if afiliado and afiliado.get("score_credito") is not None
+            afiliado.get("score_credito")
+            if afiliado
             else simulate_bureau_cedula(_get(lead, "numero_documento", ""))
         )[0],
         "afiliacion": CATEGORIA_PTS.get(cat, 0),
