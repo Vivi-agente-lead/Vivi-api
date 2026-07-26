@@ -1,0 +1,70 @@
+schema: spec-driven
+
+project: vivi-api
+
+artifact_store: both
+
+context: |
+  Project: vivi-api — conversational agent that profiles real-estate leads for Colsubsidio (Colombia housing subsidy).
+  Stack: Python 3.12, FastAPI 0.140, langchain 1.3.14, langgraph 1.2.9, langchain-openai 1.4.1,
+         SQLAlchemy 2.0.51 async (psycopg 3.3.4), pydantic v2 + pydantic-settings, sse-starlette 3.4.6,
+         langgraph-checkpoint-postgres 3.1.0.
+  Persistence: Postgres local (localhost:5432, db `vivi`, user postgres). No Alembic — Base.metadata.create_all
+               in lifespan (intentional hackathon; migrate to Alembic once lead schema stabilizes).
+  Channels: WhatsApp Cloud API implemented; HTTP/SSE web channel dropped this iteration (channel-agnostic FastAPI core).
+  Tenancy: single-tenant.
+  Run: uvicorn local (`.venv`), F5 in VSCode. No Docker used.
+  Tests: pytest 9.1.1 + pytest-asyncio 1.4.0 (asyncio_mode=auto), httpx for ASGI tests. Only smoke tests so far.
+
+strict_tdd: false   # hackathon (~20h); smoke tests + targeted tests on critical paths suffice
+
+testing:
+  runner: pytest
+  command: pytest -q
+  framework: pytest with asyncio_mode=auto
+  testpaths: tests
+  layers:
+    unit: true
+    integration: true   # httpx ASGI client for FastAPI endpoints
+    e2e: false
+  coverage:
+    available: false
+    command: ""
+  quality:
+    linter: false
+    type_checker: false
+    formatter: false
+
+conventions:
+  - Async-first (async def everywhere in app code paths)
+  - No `print()` — use `logging.getLogger(__name__)`
+  - Type hints required; prefer `from __future__ import annotations`
+  - Pydantic v2 for schemas/settings
+  - Channel-agnostic core; adapters per channel
+  - Single-tenant assumptions; no multi-tenancy abstractions
+
+rules:
+  proposal:
+    - Scope each change to a single iteration; include rollback notes for schema-affecting changes
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+    - A change is anchor-scoped to one channel when relevant (WhatsApp now; HTTP/SSE later)
+  design:
+    - Keep diagrams minimal; prefer sequence diagrams only for multi-actor flows (WhatsApp → API → LLM → Postgres)
+    - Document non-obvious LangGraph node/state decisions with rationale
+  tasks:
+    - Group by phase, hierarchical numbering
+    - Each task completable in one session (~hackathon increment)
+  apply:
+    guidelines:
+      - Follow existing app/ module patterns
+      - Do not introduce Alembic this iteration
+    tdd: false
+    test_command: "pytest -q"
+  verify:
+    test_command: "pytest -q"
+    build_command: ""
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive deltas into openspec/specs
