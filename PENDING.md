@@ -129,11 +129,16 @@ lead". New router predicates `_route_menu` / `_route_volver_menu`
 (`app/graph/router.py`) hold the stateful menu + back-navigation, entirely in
 the graph — no WhatsApp/Meta reference. Suite: 344 passed / 3 skipped.
 
-**Block C — two capabilities with no code behind them.**
-`¿Te conecto con un asesor de crédito?` (a second hand-off, distinct from the
-asesor comercial one) and `Enviar notificación por correo` (no mail transport
-exists in the project; a logged no-op behind a clean seam is the honest first
-step — do not fake a send).
+**Block C — two capabilities with no code behind them. DONE** (`feat/v2-blocks-bc`).
+`app/graph/nodes/closing.py` adds `recoger_interes_credito` (folds the
+existing "Me ha encantado tu entusiasmo…" verdict into its question intro,
+so the two turns combine into one message) and `notificar_asesor_credito`,
+reached only for `status=='calificado'` via the new `_route_handoff`
+predicate (`app/graph/router.py`); `nutrible` / `no_calificado` still end at
+`handoff`, unchanged. `app/services/notifier.py` is the clean seam for
+`Enviar notificación por correo`: its default `LoggingNotifier` only logs
+what it would send — no SMTP dependency added, no send faked. Suite: 354
+passed / 3 skipped.
 
 ## 11. Housekeeping
 

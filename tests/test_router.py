@@ -35,6 +35,7 @@ from app.graph.router import (
     _route_afiliado,
     _route_autorizacion,
     _route_edad,
+    _route_handoff,
     _route_menu,
     _route_volver_menu,
 )
@@ -49,6 +50,7 @@ _DESTINATIONS: tuple[str, ...] = (
     "elegir_preferencia_vis",
     "salir_menu",
     "elegir_municipio_catalogo",
+    "recoger_interes_credito",
 )
 
 
@@ -207,6 +209,25 @@ async def test_route_menu_traversal(profile, expected, caplog):
 )
 async def test_route_volver_menu_traversal(profile, expected, caplog):
     assert await _traverse(_route_volver_menu, profile, caplog) == expected
+
+
+# ── Block C: credit-advisor hand-off ────────────────────────────────────────
+@pytest.mark.parametrize(
+    ("profile", "expected"),
+    [
+        ({"status": "calificado"}, ["source", "recoger_interes_credito"]),
+        ({"status": "nutrible"}, ["source"]),
+        ({"status": "no_calificado"}, ["source"]),
+        ({}, ["source"]),
+    ],
+    ids=["calificado", "nutrible", "no_calificado", "sin_status"],
+)
+async def test_route_handoff_traversal(profile, expected, caplog):
+    assert await _traverse(_route_handoff, profile, caplog) == expected
+
+
+def test_route_handoff_non_calificado_returns_the_imported_sentinel():
+    assert _route_handoff({"lead_profile": {"status": "nutrible"}}) is END
 
 
 # ── Derived predicates (bookkeeping only — no longer routing) ───────────────

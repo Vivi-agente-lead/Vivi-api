@@ -31,7 +31,13 @@ from app.graph.nodes.browsing import (
     salir_menu,
 )
 from app.graph.nodes.capacity import recoger_capacidad, recoger_empleo
-from app.graph.nodes.closing import handoff, recoger_intencion, scoring
+from app.graph.nodes.closing import (
+    handoff,
+    notificar_asesor_credito,
+    recoger_intencion,
+    recoger_interes_credito,
+    scoring,
+)
 from app.graph.nodes.collect import (
     recoger_estado_civil,
     recoger_identidad,
@@ -47,6 +53,7 @@ from app.graph.router import (
     _route_afiliado,
     _route_autorizacion,
     _route_edad,
+    _route_handoff,
     _route_menu,
     _route_volver_menu,
 )
@@ -71,6 +78,10 @@ DEFAULT_ROLE = "agent"
 # inserts `menu_proyecto` / `salir_menu` / `elegir_preferencia_vis` /
 # `elegir_municipio_catalogo` / `mostrar_catalogo` between `start` and
 # `autorizacion_datos`.
+#
+# Block C (credit-advisor hand-off + email notification,
+# `app/graph/nodes/closing.py`) inserts `recoger_interes_credito` /
+# `notificar_asesor_credito` after `handoff`, for a `calificado` lead only.
 NODES: dict[str, Any] = {
     "start": start,
     "menu_proyecto": menu_proyecto,
@@ -89,6 +100,8 @@ NODES: dict[str, Any] = {
     "recoger_intencion": recoger_intencion,
     "scoring": scoring,
     "handoff": handoff,
+    "recoger_interes_credito": recoger_interes_credito,
+    "notificar_asesor_credito": notificar_asesor_credito,
 }
 
 
@@ -133,7 +146,14 @@ def build_lead_profiler() -> StateGraph:
     graph.add_conditional_edges("recoger_capacidad", turn_gated("recoger_intencion"))
     graph.add_conditional_edges("recoger_intencion", turn_gated("scoring"))
     graph.add_edge("scoring", "handoff")
-    graph.add_edge("handoff", END)
+    # Block C: only a `calificado` lead continues past `handoff`, into the
+    # credit-advisor question and the email notification; `nutrible` and
+    # `no_calificado` still end here, exactly as in Block A.
+    graph.add_conditional_edges("handoff", turn_gated(_route_handoff))
+    graph.add_conditional_edges(
+        "recoger_interes_credito", turn_gated("notificar_asesor_credito")
+    )
+    graph.add_edge("notificar_asesor_credito", END)
 
     return graph
 

@@ -51,6 +51,7 @@ ANSWERS_AFILIADO_CALIFICADO = {
     "lugar_eleccion_vivir": "Bogotá norte",
     "descripcion_vivienda_sueno": "Un apartamento con dos habitaciones y balcón.",
     "tiempo_compra_deseado": "3 meses",
+    "interes_asesor_credito": "Sí",
 }
 
 ANSWERS_NO_AFILIADO = {
@@ -283,7 +284,8 @@ async def test_afiliado_happy_path_reaches_calificado_and_sees_projects(
     """Spec: *Happy path afiliado reaches Calificado*.
 
     `status='calificado'`, `score >= 60`, `get_projects` invoked, and the
-    closing message routes to a human asesor.
+    closing message routes to a human asesor. Block C then asks about a
+    credit advisor and closes with a distinct final message.
     """
     graph_world.afiliados.append(
         make_afiliado(
@@ -301,8 +303,11 @@ async def test_afiliado_happy_path_reaches_calificado_and_sees_projects(
 
     assert chat.profile["status"] == "calificado"
     assert chat.profile["score"] >= 60
+    # The catalogue + "Me ha encantado…" message is folded into the
+    # credit-advisor question's turn, not the very last one.
+    assert any("VIBO ONCE" in reply for reply in chat.replies)
+    assert any("asesor" in reply.lower() for reply in chat.replies)
     assert "asesor" in closing.lower()
-    assert "VIBO ONCE" in closing
 
     lead = graph_world.lead(chat.conversation_id)
     assert lead.status == "calificado"

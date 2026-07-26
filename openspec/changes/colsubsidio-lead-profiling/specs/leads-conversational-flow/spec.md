@@ -82,7 +82,19 @@ The system MUST drive Colsubsidio lead profiling through a structured state grap
 - WHEN the scoring node runs
 - THEN `lead.status='no_calificado'`
 - AND the handoff message references an asistente social contact path
-- AND `no_calificado` is terminal, with no follow-up drawn — only `Calificado` continues, to "Me ha encantado tu entusiasmo…" (`docs/v2-impact-analysis.md` §7)
+- AND `no_calificado` is terminal, with no follow-up drawn — only `Calificado` continues, to "Me ha encantado tu entusiasmo…" and, since Block C, the credit-advisor hand-off below
+
+#### Scenario: Block C — the credit-advisor hand-off and email notification
+
+- GIVEN a lead reaches `Calificado`
+- WHEN `handoff` routes past its "Me ha encantado tu entusiasmo…" verdict
+- THEN the graph asks `¿Te conecto con un asesor de crédito?` (`interes_asesor_credito`, Sí/No) — a second hand-off, distinct from the commercial asesor `handoff` already routes the lead to
+- AND the answer does NOT branch the closing message — the v2 diagram draws no decision on it, so both `Sí` and `No` proceed to the same notification + closing turn
+- AND a "lead calificado" notification is logged through `app/services/notifier.py`'s `notify_lead_qualified` — no mail transport exists in this project, so nothing is actually sent; the seam only logs what it would send
+- AND the conversation closes with "Perfecto, un asesor se estará comunicando contigo próximamente!…"
+- GIVEN a `nutrible` or `no_calificado` lead
+- WHEN `handoff` runs
+- THEN the credit-advisor question is NEVER asked and no notification fires — `_route_handoff` (`app/graph/router.py`) sends both straight to `END`, unchanged from Block A
 
 #### Scenario: Afiliado branch skips identidad, interes_afiliacion, edad
 
@@ -186,10 +198,10 @@ The system MUST drive Colsubsidio lead profiling through a structured state grap
 
 - GIVEN the v2 source flow diagram
 - WHEN the implementation is compared against it
-- THEN the catalogue-first entry inversion and the project-browsing loop with back-navigation are no longer omissions — **Block B implements both** (see the *Entry inversion*, *entry-menu branches*, *browsing loop* and *back-navigation* scenarios above): `Bienvenido(a)…` → `Para continuar elige una opcion:` → `Quiero saber más de este proyecto` / `Quiero ver otro proyecto.` / `Salir`, and `Preguntar: ¿Te interesan vivienda VIS, NO VIS o ambas?` → municipio → `Mostrar menu de proyectos disponibles…` → `El usuario selecciona volver al menu anterior`
-- AND `¿Te conecto con un asesor de crédito?` and `Enviar notificación por correo` remain out of scope for Block B, implemented instead by Block C (a separate work unit; see that block's report for its own scope note)
+- THEN the catalogue-first entry inversion, the project-browsing loop with back-navigation, the credit-advisor hand-off, and the email notification are no longer omissions — **Block B implements the first two, Block C the last two** (see the *Entry inversion*, *entry-menu branches*, *browsing loop*, *back-navigation* and *credit-advisor hand-off* scenarios above): `Bienvenido(a)…` → `Para continuar elige una opcion:` → `Quiero saber más de este proyecto` / `Quiero ver otro proyecto.` / `Salir`; `Preguntar: ¿Te interesan vivienda VIS, NO VIS o ambas?` → municipio → `Mostrar menu de proyectos disponibles…` → `El usuario selecciona volver al menu anterior`; and `¿Te conecto con un asesor de crédito?` → `Enviar notificación por correo`
 - AND `lugar_eleccion_vivir` and `preferencia_vis` now move to the front for a lead who browses the catalogue (Block B's `elegir_preferencia_vis` / `elegir_municipio_catalogo`) — the interim Block A placement (collected only in `recoger_intencion`, at the end) still applies to a lead who instead answers `Quiero saber más de este proyecto` directly, which is a real branch this graph supports, not a residual gap
 - AND `preferencia_vis`'s scorer wiring (`lead-scoring`) was live since Block A but had no collecting node until Block B's `elegir_preferencia_vis`; a lead who never browses the catalogue still has `preferencia_vis=NULL` and the `-15` red flag still falls back to the derived `vis_recommended` for that lead, which is the documented Block A behavior, unchanged for that branch
+- AND `Enviar notificación por correo` is a logged no-op (`app/services/notifier.py`), never a real send — no mail transport exists in this project and none was added; this is a recorded scope boundary, not an oversight
 
 #### Scenario: Reassurance message before the capacity block
 
