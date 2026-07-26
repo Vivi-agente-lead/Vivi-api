@@ -119,10 +119,22 @@ labelled `SI` leads to **`Setear variable pos_subsidio = 0`**. Being affiliated
 elsewhere zeroes the subsidy possibility — the regulatory bottleneck the brief
 describes, expressed for the first time as a rule rather than as a field.
 
-**Open question for the team**: the diagram does not show whether this question is
-gated to non-affiliates. Asking a confirmed Colsubsidio affiliate whether they
-would like to begin affiliating is incoherent, so a gate is implied but not
-stated. Decide and record it rather than inferring it in code.
+**Decided (product owner, 2026-07-26)**: the question is **gated to
+non-affiliates**. A confirmed Colsubsidio affiliate already exists in Colsubsidio,
+so asking them to begin affiliating is incoherent. The v2 diagram converges both
+branches on this node; that is a gap in the drawing, not the intent.
+
+Consequences:
+
+- For an affiliate, `interes_afiliacion` and `otra_caja_compensacion` are never
+  collected and stay NULL — mirroring the affiliate-branch behaviour the current
+  spec already states ("`lead.otra_caja_compensacion` stays NULL").
+- `otra_caja_compensacion` is a **nullable** boolean. NULL means "not applicable,
+  never asked"; `false` means "asked, and not affiliated elsewhere". Collapsing
+  the two would make an affiliate indistinguishable from a non-affiliate who
+  answered no.
+- The `pos_subsidio = 0` rule is reachable only on the no-afiliado path, and must
+  be guarded on `is True` rather than on a falsy check so a NULL cannot trip it.
 
 ## 6. Age is asked, no longer derived
 
