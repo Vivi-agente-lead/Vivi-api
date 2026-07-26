@@ -1,0 +1,1 @@
+"""Service layer: orchestration, factories, persistence collaborators."""
