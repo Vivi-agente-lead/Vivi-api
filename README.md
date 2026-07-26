@@ -30,6 +30,10 @@ guardado con el detalle de por qué obtuvo lo que obtuvo.
 ofrece un asesor de crédito. El nutrible entra a un flujo para volver más
 adelante. Nadie se queda sin respuesta.
 
+**Entrega el perfil listo para usar.** Cada conversación se convierte en un
+informe con los datos ya interpretados, para que el asesor abra y actúe — no
+para que descifre una tabla.
+
 ---
 
 ## Así conversa
@@ -126,6 +130,37 @@ pide que **9 de cada 10 leads calificados sean afiliados**.
 
 ---
 
+## Qué recibe el asesor
+
+Cada conversación termina en un informe: el perfil del lead con todo lo que
+contó, ya traducido e interpretado.
+
+**👉 [Ver los informes](https://vivi-api.com/reporte)**
+
+No es un volcado de la base de datos. El informe hace tres cosas que la base no
+hace:
+
+**Traduce.** Donde el sistema guarda `4_8m`, el asesor lee *"4 a 8 millones"*.
+Las etiquetas salen de las mismas opciones que se le mostraron a la persona.
+
+**Calcula lo que nadie respondió.** Nadie dice cuánto le sobra al mes. El informe
+lo deduce:
+
+> Disponible al mes: **$10.200.000** (73% de sus ingresos)
+
+**Levanta las banderas.** Si ya recibió un subsidio, si está afiliado a otra
+caja, si tiene vivienda propia y busca VIS — eso sube como alerta roja, no queda
+escondido entre las filas.
+
+Y al final muestra **la cuenta completa**: por qué dio el puntaje que dio,
+criterio por criterio. El asesor puede discutir el resultado, no solo aceptarlo.
+
+> El informe está escrito como el correo que le llegaría al asesor comercial.
+> **No se envía** — este proyecto no tiene configurado un servidor de correo, y
+> preferimos mostrarlo tal cual se generaría antes que fingir un envío.
+
+---
+
 ## Pruébalo
 
 Hay tres cédulas de prueba, una por cada perfil:
@@ -141,7 +176,12 @@ la base. Lo que separa un resultado de otro son las respuestas sobre ingresos,
 gastos y ahorros — responde distinto y verás cómo cambia la clasificación en
 vivo.
 
-Para probarlo sin un número de WhatsApp hay un simulador local. Está en la
+Al terminar la conversación, el perfil aparece en
+**[los informes](https://vivi-api.com/reporte)**. Ese es el recorrido completo:
+conversas por WhatsApp, y lo que dijiste llega convertido en una ficha que un
+asesor puede usar.
+
+Para probarlo sin un número de WhatsApp hay un simulador. Está en la
 **[guía técnica](docs/GUIA-TECNICA.md)**.
 
 ---
