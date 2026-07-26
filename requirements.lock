@@ -60,7 +60,6 @@ urllib3==2.7.0
 uuid_utils==0.17.0
 uvicorn==0.51.0
 uvloop==0.22.1
--e git+ssh://git@github.com/Vivi-agente-lead/Vivi-api.git@52c7e7c5a687d0dd3fd4159c05863f675623e2ca#egg=vivi_api
 watchfiles==1.2.0
 websockets==15.0.1
 xxhash==3.8.1
