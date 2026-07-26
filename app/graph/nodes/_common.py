@@ -194,7 +194,7 @@ async def collect(
         )
         delta["awaiting_field"] = pending.name
         delta["asked_this_turn"] = True
-        delta["messages"] = [AIMessage(content=text)]
+        delta["messages"] = [AIMessage(content=text, additional_kwargs=_interactive_kwargs(pending, text))]
         return delta
 
     if awaiting in owned:
@@ -301,6 +301,28 @@ def _split_question(question: str) -> tuple[str, str]:
     for line in question.splitlines():
         (block if line.lstrip().startswith("-") else stem).append(line)
     return "\n".join(stem).strip(), "\n".join(block).strip()
+
+
+def _interactive_kwargs(pending: Field, phrased_text: str) -> dict[str, Any]:
+    """Channel-agnostic option metadata for the outbound question, or `{}`.
+
+    This is the seam `design.md`'s Channel-Agnostic Boundary requires: the
+    graph knows a pending field's option list (`Field.options()` already
+    carries it) but must never know a WhatsApp button or list exists. It
+    hands the raw data — field name, option labels, question stem without the
+    bullet block — to whichever adapter reads `AIMessage.additional_kwargs`
+    downstream (`AgentService._persist_turn`, then `InboundMessageHandler`),
+    which alone decides how (or whether) to render it tactilely.
+    """
+    options = pending.options()
+    if not options:
+        return {}
+    stem, _ = _split_question(phrased_text)
+    return {
+        "pending_field": pending.name,
+        "pending_options": list(options),
+        "pending_stem": stem,
+    }
 
 
 def _recent_messages(state: Any, limit: int = 6) -> list[Any]:

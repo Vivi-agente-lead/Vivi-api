@@ -252,10 +252,13 @@ class AgentService:
         assistant_msg = None
         tool_messages: list = []
         total_tokens = 0
+        interactive: dict[str, Any] | None = None
         produced = list(graph_result.get("messages", []))[already_seen:]
         for msg in produced:
             if not isinstance(msg, (AIMessage, ToolMessage)):
                 continue
+            if isinstance(msg, AIMessage):
+                interactive = _interactive_payload(msg) or interactive
             entity = self.message_service.lc_message_to_entity(msg, conv_id)
             if entity is None:
                 continue
@@ -275,7 +278,13 @@ class AgentService:
                 conv_id, "(No pude generar una respuesta en este momento. ¿Puedes intentarlo de nuevo?)"
             )
             assistant_msg = MessageResponse.model_validate(fb)
-        return {"user_message": None, "assistant_message": assistant_msg, "tool_messages": tool_messages}
+            interactive = None
+        return {
+            "user_message": None,
+            "assistant_message": assistant_msg,
+            "tool_messages": tool_messages,
+            "interactive": interactive,
+        }
 
     async def _maybe_persist_tool_messages(self, conv_id, graph_input, config) -> None:
         """Best-effort tool message persistence — skipped in stream mode this iteration."""
@@ -286,3 +295,25 @@ class AgentService:
     @staticmethod
     def _sse(event_name: str, payload) -> dict:
         return {"event": event_name, "data": json.dumps(payload.model_dump(mode="json"))}
+
+
+def _interactive_payload(msg: AIMessage) -> dict[str, Any] | None:
+    """Pull the pending field's option metadata off an `AIMessage`, or `None`.
+
+    `app.graph.nodes._common.collect` stows this in `additional_kwargs` when
+    the question it just asked has an option list — it is the one piece of
+    channel-agnostic data a WhatsApp (or any other) adapter needs to decide
+    whether to render tactile buttons/lists instead of plain text. Nothing
+    here is Meta- or WhatsApp-shaped: field name, verbatim option labels, and
+    the question stem without its bullet block.
+    """
+    kwargs = msg.additional_kwargs or {}
+    field = kwargs.get("pending_field")
+    options = kwargs.get("pending_options")
+    if not field or not options:
+        return None
+    return {
+        "field": field,
+        "options": list(options),
+        "stem": kwargs.get("pending_stem") or "",
+    }
