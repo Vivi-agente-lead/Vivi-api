@@ -252,31 +252,35 @@ design's own risk mitigation for API drift and it still applies.
 
 ## Phase 5 — Channel hardening (independent; land any time)
 
-- [ ] **5.1 Make wamid idempotency real**
+- [x] **5.1 Make wamid idempotency real**
   Thread `external_id` from `InboundMessageHandler.handle` through
   `AgentService.send_message` into `MessageService.persist_user_message` (which
   already accepts it). Today the column is never written, so the duplicate guard never
   fires and a Meta retry re-runs the agent and sends a second reply.
   *Files*: `app/services/inbound_handler.py`, `app/services/agent_service.py` · *closes*: CODE-001
 
-- [ ] **5.2 Idempotency test**
+- [x] **5.2 Idempotency test**
   `tests/test_inbound_idempotency.py` — deliver the same `external_id` twice; assert
   `AgentService.send_message` runs once.
   *Files*: `tests/test_inbound_idempotency.py`
 
-- [ ] **5.3 Gate the dev simulator**
+- [x] **5.3 Gate the dev simulator**
   Register `POST /whatsapp/simulate` only when `settings.app_env == "development"`.
   With `dry_run=false` on a public URL it is an open relay able to send arbitrary
   WhatsApp messages to arbitrary recipients through the project's Meta credentials.
   *Files*: `app/routers/whatsapp.py` · *closes*: SEC-001
 
-- [ ] **5.4 Verify the webhook signature**
+- [x] **5.4 Verify the webhook signature**
   Validate `X-Hub-Signature-256` on `POST /whatsapp/webhook`; 403 on mismatch, with no
   conversation created and no LLM call. Add `WHATSAPP_APP_SECRET` to settings and
   `.env.example`. The `hub.verify_token` guards only the `GET` handshake.
   *Files*: `app/routers/whatsapp.py`, `app/core/config.py`, `.env.example` · *closes*: SEC-002
+  **Note**: `.env.example` update BLOCKED — the sandbox's permission settings deny
+  Read/Edit/Bash access to any `.env*` path, even this non-secret template. `app/core/config.py`
+  (the actual source of truth) and `app/routers/whatsapp.py` are done. See apply report for the
+  exact line to add by hand: `WHATSAPP_APP_SECRET=`.
 
-- [ ] **5.5 Health reports readiness**
+- [x] **5.5 Health reports readiness**
   `GET /health` returns 503 when the database is unreachable, naming the dependency.
   Stop swallowing `init_db()` failures silently in the lifespan. Without this the
   deployment spec's health scenario passes against a demo with no tables.
@@ -298,9 +302,16 @@ design's own risk mitigation for API drift and it still applies.
   Run bootstrap + seed once against the deployed database.
   *Files*: `fly.toml`
 
-- [ ] **6.3 Reconcile Postgres credentials**
+- [ ] **6.3 Reconcile Postgres credentials — BLOCKED (sandbox permission)**
   `.env.example` (`postgres`/`123456789`), `app/core/config.py` defaults
   (`vivi`/`vivi`) and `docker-compose.yml` (`vivi`/`vivi`) disagree three ways.
+  Verified `app/core/config.py` and `docker-compose.yml` already agree on `vivi`/`vivi`
+  (2 of 3 sources) — no new credentials invented, no change needed on those two files.
+  The only remaining edit is `.env.example`, which this session's sandbox permission
+  settings deny (Read/Edit/Bash all refuse any `.env*` path). Needs a session with
+  filesystem access to that path, or a human, to apply:
+  `POSTGRES_USER=postgres` → `POSTGRES_USER=vivi`,
+  `POSTGRES_PASSWORD=123456789` → `POSTGRES_PASSWORD=vivi`.
   *Files*: `.env.example`, `app/core/config.py`, `docker-compose.yml` · *closes*: DOC-003
 
 - [ ] **6.4 README rewrite**
