@@ -34,4 +34,17 @@ class AgentState(TypedDict, total=False):
     """The user's raw reply for this turn, consumed by exactly one node."""
 
     awaiting_field: str
-    """Name of the field whose answer this turn is waiting for; `""` when none."""
+    """Name of the field whose answer the conversation owes; `""` when none.
+
+    Survives across turns — it is how the next invocation knows which node's
+    question the incoming reply answers.
+    """
+
+    asked_this_turn: bool
+    """True once some node has emitted a question in the current invocation.
+
+    Turn-scoped, not conversation-scoped: `start` resets it on every entry, and
+    `turn_gated` reads it to end the turn. `awaiting_field` cannot serve this
+    role — it is still set when the turn *begins*, so gating on it would stop
+    the graph at `start` before the node that asked could read the answer.
+    """

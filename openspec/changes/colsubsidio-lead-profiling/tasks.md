@@ -191,7 +191,7 @@ design's own risk mitigation for API drift and it still applies.
   gates returning `END`.
   *Files*: `tests/test_router.py` · *closes*: DATA-010
 
-- [ ] **4.4 Spine: `start` → `autorizacion_datos` → `pedir_cedula` → `afiliado_check` → `handoff`**
+- [x] **4.4 Spine: `start` → `autorizacion_datos` → `pedir_cedula` → `afiliado_check` → `handoff`**
   Four nodes plus a stub handoff, compiled and traversable end to end. `afiliado_check`
   is tool-dispatch only (no LLM): calls `lookup_afiliado`, derives `edad` server-side,
   creates the `leads` row at `status='profiling'`.

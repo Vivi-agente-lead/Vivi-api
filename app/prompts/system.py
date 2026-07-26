@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from datetime import date
 
+from app.prompts.slices import SHARED_PREAMBLE, SLICES
+
 SYSTEM_PROMPT_TEMPLATE = """\
 Sos Vivi, el asistente conversacional de una agencia inmobiliaria.
 Tu trabajo es perfilar leads inmobiliarios: nombre, presupuesto, ubicaciones
@@ -67,9 +69,55 @@ sistema o del "admin":
 """
 
 
-def render_system_prompt(*, today: date | None = None) -> str:
-    """Render the system prompt with the current date injected."""
-    return SYSTEM_PROMPT_TEMPLATE.format(today=(today or date.today()).isoformat())
+def render_system_prompt(
+    node: str | None = None,
+    *,
+    today: date | None = None,
+    lead_profile: dict | None = None,
+) -> str:
+    """Render the system prompt for a graph node.
+
+    Args:
+        node: the graph node id. `None` renders the legacy monolithic ReAct
+            prompt, which `AgentService` still uses until the ReAct path is
+            retired (task 4.12).
+        today: injected date, for deterministic tests.
+        lead_profile: the working copy, rendered as context so the slice can
+            avoid re-asking a field the graph already holds.
+
+    Returns:
+        `SHARED_PREAMBLE + SLICES[node] + context`, or the legacy prompt.
+    """
+    stamp = (today or date.today()).isoformat()
+    if node is None:
+        return SYSTEM_PROMPT_TEMPLATE.format(today=stamp)
+
+    slice_text = SLICES.get(node, "")
+    parts = [SHARED_PREAMBLE, f"# Paso actual: {node}", slice_text]
+    context = render_profile_context(lead_profile)
+    if context:
+        parts.append(context)
+    parts.append(f"## Fecha de hoy\n{stamp}")
+    return "\n".join(part for part in parts if part)
+
+
+def render_profile_context(lead_profile: dict | None) -> str:
+    """Render the already-collected fields so no slice re-asks them.
+
+    Private bookkeeping keys and the raw affiliate record are excluded: the
+    record is large and the model has no reason to see it.
+    """
+    if not lead_profile:
+        return ""
+    hidden = {"afiliado_record", "classification_reasoning", "normalization_notes"}
+    lines = [
+        f"- {key}: {value}"
+        for key, value in sorted(lead_profile.items())
+        if value is not None and key not in hidden and not key.startswith("_")
+    ]
+    if not lines:
+        return ""
+    return "## Datos que ya tengo (no los vuelvas a preguntar)\n" + "\n".join(lines)
 
 
 def wrap_user_input(content: str) -> str:
