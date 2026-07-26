@@ -36,6 +36,7 @@ from tests.conftest import World, make_afiliado, make_proyecto, tool_config
 # a bundle that wrongly asked for a removed field would show up as a KeyError
 # naming the field, not as a silent pass.
 ANSWERS_AFILIADO_CALIFICADO = {
+    "menu_opcion": "Quiero saber más de este proyecto",
     "autorizacion_datos": "Sí",
     "tipo_documento": "Cédula de ciudadanía",
     "numero_documento": "1010101010",
@@ -50,9 +51,11 @@ ANSWERS_AFILIADO_CALIFICADO = {
     "lugar_eleccion_vivir": "Bogotá norte",
     "descripcion_vivienda_sueno": "Un apartamento con dos habitaciones y balcón.",
     "tiempo_compra_deseado": "3 meses",
+    "interes_asesor_credito": "Sí",
 }
 
 ANSWERS_NO_AFILIADO = {
+    "menu_opcion": "Quiero saber más de este proyecto",
     "autorizacion_datos": "Sí",
     "tipo_documento": "Cédula de ciudadanía",
     "numero_documento": "1234567890",
@@ -75,6 +78,7 @@ ANSWERS_NO_AFILIADO = {
 # Chosen so `simulate_bureau_cedula` bands Malo (0 pts) and the subsidio-previo
 # override lands well below `NURTURE_FLOOR` (30) — the third terminal.
 ANSWERS_NO_CALIFICADO = {
+    "menu_opcion": "Quiero saber más de este proyecto",
     "autorizacion_datos": "Sí",
     "tipo_documento": "Cédula de ciudadanía",
     "numero_documento": "5555555555",
@@ -169,7 +173,12 @@ async def test_spine_asks_for_consent_then_document_then_looks_the_lead_up(
     graph_world.afiliados.append(make_afiliado(numero_documento="1010101010", edad=34))
     chat = Conversation()
 
-    assert "autorizas" in (await chat.say("Hola")).lower()
+    assert "opción" in (await chat.say("Hola")).lower()
+    assert chat.awaiting == "menu_opcion"
+
+    assert "autorizas" in (
+        await chat.say("Quiero saber más de este proyecto")
+    ).lower()
     assert chat.awaiting == "autorizacion_datos"
 
     assert "documento" in (await chat.say("Sí")).lower()
@@ -187,6 +196,7 @@ async def test_spine_asks_for_consent_then_document_then_looks_the_lead_up(
     assert chat.profile["categoria"] == "A"
     assert chat.profile["edad"] == 34
     assert chat.nodes == [
+        "menu_proyecto",
         "autorizacion_datos",
         "pedir_cedula",
         "pedir_cedula",
@@ -200,7 +210,13 @@ async def test_spine_creates_the_lead_row_at_status_profiling(
     """`afiliado_check` is the first persistence point (`design.md` §2)."""
     graph_world.afiliados.append(make_afiliado(numero_documento="1010101010"))
     chat = Conversation()
-    for reply in ("Hola", "Sí", "CC", "1010101010"):
+    for reply in (
+        "Hola",
+        "Quiero saber más de este proyecto",
+        "Sí",
+        "CC",
+        "1010101010",
+    ):
         await chat.say(reply)
 
     lead = graph_world.lead(chat.conversation_id)
@@ -215,7 +231,13 @@ async def test_spine_marks_an_unknown_document_as_no_afiliado(
 ) -> None:
     """A cedula absent from `afiliados_colsubsidio` takes the no-afiliado branch."""
     chat = Conversation()
-    for reply in ("Hola", "Sí", "CC", "99887766"):
+    for reply in (
+        "Hola",
+        "Quiero saber más de este proyecto",
+        "Sí",
+        "CC",
+        "99887766",
+    ):
         await chat.say(reply)
 
     assert chat.profile["afiliado_colsubsidio"] is False
@@ -229,6 +251,7 @@ async def test_consent_refusal_ends_the_conversation_without_a_lead_row(
     """`_route_autorizacion` sends a refusal to `END`; nothing is persisted."""
     chat = Conversation()
     await chat.say("Hola")
+    await chat.say("Quiero saber más de este proyecto")
     farewell = await chat.say("No")
 
     assert chat.profile["autorizacion_datos"] is False
@@ -243,6 +266,7 @@ async def test_an_answer_outside_the_domain_is_re_asked_and_recorded(
     """Never guess: an unmapped document type is re-asked and audited."""
     chat = Conversation()
     await chat.say("Hola")
+    await chat.say("Quiero saber más de este proyecto")
     await chat.say("Sí")
     await chat.say("Tarjeta de identidad")
 
@@ -260,7 +284,8 @@ async def test_afiliado_happy_path_reaches_calificado_and_sees_projects(
     """Spec: *Happy path afiliado reaches Calificado*.
 
     `status='calificado'`, `score >= 60`, `get_projects` invoked, and the
-    closing message routes to a human asesor.
+    closing message routes to a human asesor. Block C then asks about a
+    credit advisor and closes with a distinct final message.
     """
     graph_world.afiliados.append(
         make_afiliado(
@@ -278,8 +303,11 @@ async def test_afiliado_happy_path_reaches_calificado_and_sees_projects(
 
     assert chat.profile["status"] == "calificado"
     assert chat.profile["score"] >= 60
+    # The catalogue + "Me ha encantado…" message is folded into the
+    # credit-advisor question's turn, not the very last one.
+    assert any("VIBO ONCE" in reply for reply in chat.replies)
+    assert any("asesor" in reply.lower() for reply in chat.replies)
     assert "asesor" in closing.lower()
-    assert "VIBO ONCE" in closing
 
     lead = graph_world.lead(chat.conversation_id)
     assert lead.status == "calificado"
@@ -532,6 +560,7 @@ async def test_the_conversation_resumes_from_the_checkpointer(
     )
     chat = Conversation()
     await chat.say("Hola")
+    await chat.say("Quiero saber más de este proyecto")
     await chat.say("Sí")
     await chat.say("Cédula de ciudadanía")
     await chat.say("1010101010")

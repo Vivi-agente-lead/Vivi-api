@@ -32,6 +32,9 @@ __all__ = [
     "_route_autorizacion",
     "_route_afiliado",
     "_route_edad",
+    "_route_menu",
+    "_route_volver_menu",
+    "_route_handoff",
 ]
 
 MINIMUM_AGE = 18
@@ -84,3 +87,46 @@ def _route_edad(state: Any) -> str:
     if edad is None or edad < MINIMUM_AGE:
         return END
     return "recoger_interes_afiliacion"
+
+
+# ── Block B: entry inversion + catalogue browsing (``docs/v2-impact-analysis.md``
+# §1, §8) ─────────────────────────────────────────────────────────────────────
+def _route_menu(state: Any) -> str:
+    """The v2 diagram's three-way entry menu.
+
+    `"ver_otro_proyecto"` enters the catalogue-browsing loop; `"salir"` ends
+    the conversation cordially; `"ver_detalle"` (and any unmapped/unanswered
+    value, defensively — `turn_gated` should never let this run before
+    `menu_opcion` is set) enters the same qualification flow both this branch
+    and the browsing loop's "no volver" exit converge on.
+    """
+    opcion = _profile(state).get("menu_opcion")
+    if opcion == "ver_otro_proyecto":
+        return "elegir_preferencia_vis"
+    if opcion == "salir":
+        return "salir_menu"
+    return "autorizacion_datos"
+
+
+def _route_volver_menu(state: Any) -> str:
+    """Back-navigation out of `mostrar_catalogo`.
+
+    `True` loops back to `elegir_municipio_catalogo` (which re-asks because
+    `mostrar_catalogo` just cleared `lugar_eleccion_vivir`); anything else
+    proceeds into the qualification flow, carrying the browsing branch's
+    `preferencia_vis` and `municipio_normalizado` forward.
+    """
+    if _profile(state).get("volver_menu_anterior") is True:
+        return "elegir_municipio_catalogo"
+    return "autorizacion_datos"
+
+
+# ── Block C: credit-advisor hand-off (``docs/v2-impact-analysis.md`` §7-§8) ──
+def _route_handoff(state: Any) -> str:
+    """Only a `calificado` lead continues past `handoff` to the credit-advisor
+    question and the email notification; `nutrible` and `no_calificado` end
+    here, exactly as in Block A.
+    """
+    if _profile(state).get("status") == "calificado":
+        return "recoger_interes_credito"
+    return END

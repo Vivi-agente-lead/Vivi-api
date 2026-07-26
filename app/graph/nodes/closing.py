@@ -5,6 +5,15 @@ catalogue up to decide `vis_recommended`, then delegates the verdict to
 `classify_lead`, which runs the pure `lead_scorer`. That is what makes the score
 reproducible across two process invocations, which is half of what the juror
 rubric measures.
+
+Block C (`docs/v2-impact-analysis.md` §7-§8) adds `recoger_interes_credito` and
+`notificar_asesor_credito` after `handoff`: a `calificado` lead is asked
+`¿Te conecto con un asesor de crédito?` (a second hand-off, distinct from the
+asesor comercial `handoff` already routes to) and then a "lead calificado"
+notification is logged through `app/services/notifier.py` — no mail transport
+exists in this project, so that module only logs what it would send.
+`nutrible` and `no_calificado` are unaffected: `_route_handoff`
+(`app/graph/router.py`) sends them straight to `END`, exactly as in Block A.
 """
 
 from __future__ import annotations
@@ -17,15 +26,23 @@ from langchain_core.runnables import RunnableConfig
 
 from app.graph.nodes._common import Field, collect, profile_of, say
 from app.graph.nodes._validators import (
+    parse_bool_si_no,
     parse_free_text,
     validate_enumerated,
     validate_municipio,
 )
+from app.services.notifier import notify_lead_qualified
 from app.tools.lead_tools import classify_lead, get_projects, save_lead
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["recoger_intencion", "scoring", "handoff"]
+__all__ = [
+    "recoger_intencion",
+    "scoring",
+    "handoff",
+    "recoger_interes_credito",
+    "notificar_asesor_credito",
+]
 
 _INTENCION_FIELDS = (
     Field(
@@ -140,19 +157,22 @@ async def handoff(state: Any, config: RunnableConfig) -> dict[str, Any]:
 
     `get_projects` runs **only** for a `calificado` lead: showing a catalogue
     to a lead who does not qualify is precisely the commercial noise the
-    change exists to remove. Only `Calificado` continues in the v2 diagram —
-    `Nutrible` and `No calificado` are terminal with no follow-up drawn.
+    change exists to remove. `Nutrible` and `No calificado` are terminal with
+    no follow-up drawn, exactly as in Block A. `Calificado` no longer ends
+    here — `_route_handoff` sends it on to `recoger_interes_credito`
+    (Block C), which folds this same "Me ha encantado tu entusiasmo…" message
+    into its own opening question instead of emitting it twice.
     """
     profile = profile_of(state)
     status = profile.get("status") or "nutrible"
-    text = _HANDOFF_FALLBACK.get(status, _HANDOFF_FALLBACK["nutrible"])
 
     if status == "calificado":
-        proyectos = await _ready_projects(profile, config)
-        if proyectos:
-            listing = "\n".join(f"- {name}" for name in proyectos)
-            text = f"{text}\n\nAlgunos proyectos en tu zona:\n{listing}"
+        # Rendered by `recoger_interes_credito` as its question's intro, so
+        # the two turns fold into one message instead of repeating the score
+        # verdict every time the conversation replays past this point.
+        return {"current_node": "handoff", "lead_profile": profile}
 
+    text = _HANDOFF_FALLBACK.get(status, _HANDOFF_FALLBACK["nutrible"])
     message = await say(
         state,
         node=_HANDOFF_SLICES.get(status, "handoff_nutrible"),
@@ -162,6 +182,87 @@ async def handoff(state: Any, config: RunnableConfig) -> dict[str, Any]:
     logger.info("graph.handoff", extra={"status": status})
     return {
         "current_node": "handoff",
+        "lead_profile": profile,
+        "messages": [message],
+    }
+
+
+# ── Block C: credit-advisor hand-off + email notification ──────────────────
+_CREDITO_FIELDS = (
+    Field(
+        name="interes_asesor_credito",
+        parse=parse_bool_si_no,
+        options_key="interes_asesor_credito",
+    ),
+)
+
+_CIERRE_ASESOR_CREDITO_TEXT = (
+    "Perfecto, un asesor se estará comunicando contigo próximamente! Que "
+    "pases un buen día."
+)
+
+
+async def _calificado_intro(profile: dict[str, Any], config: RunnableConfig) -> str:
+    """The `Calificado` verdict message, plus the catalogue when there is one.
+
+    Exactly what `handoff` used to render directly; folded here into
+    `recoger_interes_credito`'s question intro instead, so the two turns
+    combine into one message.
+    """
+    text = _HANDOFF_FALLBACK["calificado"]
+    proyectos = await _ready_projects(profile, config)
+    if proyectos:
+        listing = "\n".join(f"- {name}" for name in proyectos)
+        text = f"{text}\n\nAlgunos proyectos en tu zona:\n{listing}"
+    return text
+
+
+async def recoger_interes_credito(state: Any, config: RunnableConfig) -> dict[str, Any]:
+    """`¿Te conecto con un asesor de crédito?` — a `calificado` lead only.
+
+    A second hand-off, distinct from the commercial asesor `handoff` already
+    routes a `calificado` lead to. The v2 diagram draws no branch on the
+    answer — both `Sí` and `No` proceed the same way, to
+    `notificar_asesor_credito` — so the field is recorded for the audit trail
+    (surfaced to `notify_lead_qualified`) without gating anything.
+    """
+    profile = profile_of(state)
+    intro = await _calificado_intro(profile, config)
+    modified_state = {**state, "lead_profile": profile}
+    delta = await collect(
+        modified_state,
+        config,
+        node="recoger_interes_credito",
+        fields=_CREDITO_FIELDS,
+        intro=intro,
+    )
+    logger.info("graph.handoff", extra={"status": "calificado"})
+    return delta
+
+
+async def notificar_asesor_credito(state: Any, config: RunnableConfig) -> dict[str, Any]:
+    """`Enviar notificación por correo`, then the final closing message.
+
+    No mail transport exists in this project: `notify_lead_qualified` only
+    logs what it would send (`app/services/notifier.py`). This is the honest
+    first step the apply report calls for — nothing here claims a delivered
+    email.
+    """
+    profile = profile_of(state)
+    quiere_asesor = profile.get("interes_asesor_credito")
+    await notify_lead_qualified(profile, quiere_asesor_credito=quiere_asesor)
+    message = await say(
+        state,
+        node="notificar_asesor_credito",
+        profile=profile,
+        text=_CIERRE_ASESOR_CREDITO_TEXT,
+    )
+    logger.info(
+        "graph.notificado_asesor_credito",
+        extra={"interes_asesor_credito": quiere_asesor},
+    )
+    return {
+        "current_node": "notificar_asesor_credito",
         "lead_profile": profile,
         "messages": [message],
     }

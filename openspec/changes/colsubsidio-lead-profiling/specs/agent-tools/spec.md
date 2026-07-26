@@ -58,8 +58,19 @@ The system MUST expose exactly five tools to the agent runtime: `lookup_afiliado
 - AND the tool MUST be called with `municipio_normalizado`, never with the raw `lugar_eleccion_vivir`, because the source municipio values are unaccented (`Bogota`, `Ubate`) and would not match the accented lead-facing options
 - GIVEN a `nutrible` or `no_calificado` lead
 - WHEN the handoff node runs
-- THEN it MUST NOT invoke `get_projects` (no recommendation path for a lead that is not `calificado`)
-- **Amended by the graph-topology migration (`docs/v2-impact-analysis.md` §1, §8)**: this MUST holds for the linear qualification flow this change ships (Block A). The v2 source diagram's project-browsing loop (`Quiero ver otro proyecto.` → `¿Te interesan vivienda VIS, NO VIS o ambas?` → municipio → `Mostrar menu de proyectos disponibles…`) calls `get_projects` **before** qualification, for any lead browsing the catalogue — a later work unit that amends this scenario again when that loop ships; it is not implemented by, and does not contradict, this revision
+- THEN it MUST NOT invoke `get_projects` from `handoff` (no recommendation path for a lead that is not `calificado`)
+
+**Amended by the graph-topology migration, Block B (`docs/v2-impact-analysis.md` §1, §8)**: `get_projects` is no longer READY/Calificado-only overall — it is also called from the entry-menu welcome message (`app/graph/nodes/browsing.py::menu_proyecto`, unfiltered, to source a real default project deterministically) and from the catalogue-browsing loop (`app/graph/nodes/browsing.py::mostrar_catalogo`, filtered by `municipio_normalizado` and a `tipo` derived from the lead's stated `preferencia_vis`), for **any** lead browsing the catalogue, before qualification and before a `status` exists at all. The MUST above narrows to: `handoff` itself MUST NOT call `get_projects` for a `nutrible` or `no_calificado` lead. It no longer means "only a `calificado` lead may trigger `get_projects` anywhere in the graph."
+
+#### Scenario: get_projects is called before qualification from the entry menu and the browsing loop
+
+- GIVEN a new conversation with no `leads` row yet
+- WHEN `menu_proyecto` renders the welcome message
+- THEN it calls `get_projects()` with no filters to source a real, deterministically-ordered default project (first row by `proyecto`, then `modelo`) — never a hardcoded project name
+- GIVEN a lead who chose `Quiero ver otro proyecto.` and answered `preferencia_vis` and a municipio
+- WHEN `mostrar_catalogo` renders the catalogue
+- THEN it calls `get_projects(municipio=municipio_normalizado, tipo=<VIS|NO VIS|None>)`, `tipo` derived from `preferencia_vis` (`vis`→`VIS`, `no_vis`→`NO VIS`, `ambas`→ no `tipo` filter)
+- AND this happens regardless of `status`, because no `status` has been computed yet at this point in the conversation
 
 #### Scenario: get_projects tolerates the corrupt municipio value
 
