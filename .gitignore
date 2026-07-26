@@ -26,7 +26,8 @@ htmlcov/
 .ruff_cache/
 
 .idea/
-.vscode/
+# .vscode kept tracked so launch.json is shared; user-specific settings.json
+# can be added later if needed.
 *.swp
 *.swo
 .DS_Store
