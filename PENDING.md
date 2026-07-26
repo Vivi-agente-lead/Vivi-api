@@ -140,6 +140,18 @@ predicate (`app/graph/router.py`); `nutrible` / `no_calificado` still end at
 what it would send — no SMTP dependency added, no send faked. Suite: 354
 passed / 3 skipped.
 
-## 11. Housekeeping
+## 11. Simulator contract vs spec
+
+`specs/whatsapp-channel-pipeline/spec.md`, scenario *dry_run logs the would-be
+reply*, requires that "the response body includes the would-be reply text".
+`POST /whatsapp/simulate` instead returns `{"status":"queued"}` and processes in
+a background task, so the reply only reaches the log and the `messages` table.
+
+Either the endpoint should await the turn when `dry_run=true` (it already has no
+outbound call to make, so there is nothing to keep asynchronous) or the scenario
+should be amended. Rehearsing a conversation over HTTP is meaningfully harder
+without it.
+
+## 12. Housekeeping
 
 `.atl/` is untracked (agent tooling cache — gitignore it or commit it, but decide).
