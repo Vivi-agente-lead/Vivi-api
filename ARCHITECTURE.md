@@ -22,7 +22,7 @@ Meta Cloud API ──▶ app/routers/whatsapp.py ──▶ InboundMessageHandler
                               ┌─────────────────────────┼─────────────────────────┐
                               ▼                         ▼                         ▼
                     ConversationService        build_graph(role).ainvoke   MessageService
-                    (get-or-create thread)      (the 15-node StateGraph)    (persist turn)
+                    (get-or-create thread)      (the 19-node StateGraph)    (persist turn)
                                                         │
                                                         ▼
                                               ToolContext (session, conversation_id)
@@ -55,56 +55,79 @@ user-facing error.
 web channel and reuses the identical seam, but **no router mounts it** — see
 README.md "What works" for why that matters to a juror reading the code.
 
-## 2. The 15-node graph topology
+## 2. The 19-node graph topology
 
 `app/graph/builder.py::build_lead_profiler()` assembles a LangGraph
-`StateGraph(AgentState)` with exactly the 15 nodes named in `design.md` §3:
+`StateGraph(AgentState)`. The v2 source documents inverted the entry — a
+conversation now opens on the catalogue, not on consent — and collapsed the four
+capacity bundles into one, since v2 asks a single household block of everyone
+instead of splitting by partner and employment status.
 
 ```
 START
   │
   ▼
-start ──▶ autorizacion_datos ──(no)──▶ END
-                │ (sí)
-                ▼
-          pedir_cedula ──▶ afiliado_check
-                                 │
-              ┌──────────────────┼───────────────────────┐
-              ▼ (no afiliado)    ▼ (afiliado, edad≥18)    ▼ (afiliado, edad<18)
-        recoger_identidad        │                       END
-              │                  │
-         ┌────┴────┐             │
-         ▼(<18)    ▼(≥18)        │
-        END         └────────────┴──▶ recoger_estado_civil
-                                            │
-                            ┌───────────────┴───────────────┐
-                            ▼ (no afiliado)                  ▼ (afiliado)
-                     recoger_otra_caja                        │
-                            └───────────────┬─────────────────┘
-                                            ▼
-                                     recoger_empleo
-                                            │
-        ┌───────────────────┬──────────────┴──────┬───────────────────┐
-        ▼                   ▼                     ▼                   ▼
-cap_emp_con_pareja  cap_emp_sin_pareja   cap_ind_con_pareja   cap_ind_sin_pareja
-        └───────────────────┴──────────────┬───────┴───────────────────┘
-                                            ▼
-                                    recoger_intencion
-                                            ▼
-                                        scoring   (pure — no LLM)
-                                            ▼
-                                        handoff
-                                            ▼
-                                           END
+start ──▶ menu_proyecto ──(salir)──▶ salir_menu ──▶ END
+                │
+                ├──(ver otro proyecto)──▶ elegir_preferencia_vis
+                │                                │
+                │                                ▼
+                │                        elegir_municipio_catalogo ◀──(volver)──┐
+                │                                │                              │
+                │                                ▼                              │
+                │                          mostrar_catalogo ────────────────────┘
+                │                                │ (continuar)
+                ▼                                │
+        autorizacion_datos ◀─────────────────────┘
+                │
+        ┌───────┴───────┐
+        ▼ (no)          ▼ (sí)
+       END        pedir_cedula ──▶ afiliado_check
+                                        │
+                    ┌───────────────────┼──────────────────────┐
+                    ▼ (no afiliado)     ▼ (afiliado, ≥18)      ▼ (afiliado, <18)
+             recoger_identidad          │                     END
+                    │                   │
+               ┌────┴────┐              │
+               ▼ (<18)   ▼ (≥18)        │
+              END   recoger_interes_afiliacion
+                              │         │
+                              └─────────┴──▶ recoger_estado_civil
+                                                    ▼
+                                              recoger_empleo
+                                                    ▼
+                                            recoger_capacidad
+                                                    ▼
+                                            recoger_intencion
+                                                    ▼
+                                                 scoring   (pure — no LLM)
+                                                    ▼
+                                                 handoff
+                                                    │
+                                    ┌───────────────┴───────────────┐
+                                    ▼ (calificado)                  ▼ (nutrible / no_calificado)
+                          recoger_interes_credito                  END
+                                    ▼
+                          notificar_asesor_credito ──▶ END
 ```
 
-Source: `app/graph/builder.py::NODES` (the dict literally is this list) and
-`app/graph/router.py` for the five conditional-edge predicates
-(`_route_autorizacion`, `_route_afiliado`, `_route_edad`, `_route_otra_caja`,
-`_route_capacity`). Every predicate returns the `END` sentinel imported from
-`langgraph.graph` — never the literal string `"END"` — because an earlier
-design revision shipped exactly that defect and it is silent: a router
-returning `"END"` looks like a valid (if wrong) node id to LangGraph.
+Source: `app/graph/builder.py::NODES` and `app/graph/router.py` for the
+conditional-edge predicates (`_route_menu`, `_route_volver_menu`,
+`_route_autorizacion`, `_route_afiliado`, `_route_edad`, `_route_handoff`).
+
+Two things the diagram encodes that are easy to miss:
+
+- **The affiliation question is gated by topology, not by a predicate.**
+  `recoger_interes_afiliacion` is reachable only from `_route_edad`, which only
+  the no-afiliado branch enters. A Colsubsidio affiliate can never be asked
+  whether they would like to affiliate, because no edge leads there.
+- **Every predicate returns the `END` sentinel imported from `langgraph.graph`**,
+  never the literal string `"END"`. An earlier revision shipped exactly that
+  defect and it is silent: LangGraph logs `wrote to unknown channel` and
+  terminates the graph with no exception, so the consent opt-out and both age
+  gates would have *looked* like they worked while doing nothing. Only a
+  traversal assertion catches it — mutating the import fails 16 tests in
+  `tests/test_router.py`.
 
 ### 2.1 One turn = one node's question — `turn_gated`
 
@@ -193,7 +216,7 @@ of the same inputs, which an LLM cannot guarantee.
 | 3. Ingreso | 20 | `rango_salarial` | For an afiliado this is *derived* from `salario_base_cotizacion` (`app/graph/nodes/_validators.py::derive_rango_salarial`), never asked — an affiliate is never asked `rango_salarial` at all. |
 | 4. Ahorro | 15 | `ahorros_o_cesantias` | Exact slug lookup; the substring regression this replaces is documented above. |
 | 5. Tiempo de compra | 10 | `tiempo_compra_deseado` | |
-| 6. Estabilidad laboral | 15 | `contrato_laboral` × `antiguedad_laboral` | Independientes (`prestacion_servicios`) get a flat 6 pts regardless of tenure — there is no `antiguedad_laboral` question on that branch. |
+| 6. Capacidad de pago | 15 | `total_ingresos_mensuales` − `gastos_mensuales` | Disposable income as a share of income. Replaced Estabilidad laboral: v2 dropped `antiguedad_laboral`, and removing the field without re-budgeting would have silently cost every lead 15 points. |
 
 Red flags, applied additively to the six-bucket sum, then clamped to `[0, 100]`:
 
@@ -207,8 +230,8 @@ Red flags, applied additively to the six-bucket sum, then clamped to `[0, 100]`:
   `numero_pac > 0`. This is additive with the flags above, not exclusive.
 
 **Absolute override — prior subsidy.** If `subsidio_vivienda_anterior is
-True`, the classification can never be `ready`, regardless of the numeric
-score: `nurture` if the score is ≥ 30, `nurture_social` otherwise. The score
+True`, the classification can never be `calificado`, regardless of the numeric
+score: `nutrible` if the score is ≥ 30, `no_calificado` otherwise. The score
 itself is **never decremented** for this — it stays the real number for
 analytics, and only the classification is overridden. This rule is collected
 on **all four** capacity bundles (§2.2), including every lead without a
@@ -243,7 +266,7 @@ end of `afiliado_check` (row created, `status='profiling'`), after every
 `save_lead` tool call (opportunistic upsert), and after `classify_lead` inside
 `scoring` (terminal write of `status`/`score`/`score_rating`/
 `classification_reasoning`). The **terminal-status guard** — a lead already at
-`ready`/`nurture`/`nurture_social` cannot have its status changed — lives in
+`calificado`/`nutrible`/`no_calificado` cannot have its status changed — lives in
 `LeadRepository.upsert_by_conversation_id`
 (`app/models/repositories/lead_repository.py`), not in any of the three
 callers, precisely so none of them can bypass it by construction.
