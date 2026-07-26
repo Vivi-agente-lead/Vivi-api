@@ -15,12 +15,26 @@ the actual codebase and against the two source-of-truth documents in `docs/`.
 
 ## 1. Summary
 
-| Severity | Count |
-|---|---|
-| BLOCKER | 6 |
-| CRITICAL | 12 |
-| WARNING | 14 |
-| SUGGESTION | 3 |
+| Severity | Count | Fixed | Open |
+|---|---|---|---|
+| BLOCKER | 5 | 5 | 0 |
+| CRITICAL | 18 | 14 | 4 |
+| WARNING | 15 | 12 | 3 |
+| SUGGESTION | 3 | 1 | 2 |
+| INFO | 1 | — | — |
+| **Total** | **42** | **32** | **9** |
+
+> **Status as of 2026-07-26.** Every artifact-level finding has been applied to the specs
+> and the design — see [Appendix D](#appendix-d--resolution-log-2026-07-26) — and
+> `tasks.md` now exists, closing the last blocker. The 9 that remain open are all code- or
+> file-level; each is carried by a spec requirement **and assigned to a numbered task**, so
+> the fix is both specified and scheduled. `SDD-002` was reclassified from
+> BLOCKER to INFO per [Appendix B](#notes-on-severity-framing). The ledger's own evidence
+> pointers, its original severity counts, and two defects in Appendix B are corrected in
+> [Appendix C](#appendix-c--corrections-to-appendix-b-and-to-the-ledgers-own-evidence).
+>
+> The counts above are the first ones in this document derived by parsing the table rather
+> than by hand — see C.6.
 
 The headline result is not the volume — it is **where** the defects are. The design
 states in §1 that "the graph node list maps one-to-one onto the Colsubsidio flow
@@ -40,47 +54,47 @@ reads the design. They will disagree.
 
 | id | lens | location | severity | status | evidence |
 |---|---|---|---|---|---|
-| SDD-001 | reliability | `openspec/changes/colsubsidio-lead-profiling/` | BLOCKER | open | `tasks.md` absent; SDD chain broken before apply |
-| SDD-002 | reliability | `app/**` | BLOCKER | open | Zero implementation; every spec delta describes code that does not exist |
-| SDD-003 | reliability | `specs/seed-and-bootstrap/spec.md` ↔ `design.md:570` | BLOCKER | open | Spec MUSTs `scripts/bootstrap_db.py`; design says "no separate bootstrap script" |
-| SDD-004 | reliability | `specs/lead-data-model/spec.md:47` ↔ `specs/lead-scoring/spec.md:14` | BLOCKER | open | `score_rating` derived from `score` (0–100) via 150–950 bands — impossible |
-| DATA-001 | reliability | `design.md:164` ↔ `docs/…xlsx` Leads!N5:N7 | BLOCKER | open | `empleado_o_independiente` domain is `Termino fijo/indefinido/Prestacion de servicios`, never `"empleado"` → all leads route to `ind_*` bundle |
-| LOGIC-001 | reliability | `design.md:181` ↔ `docs/Flujo….json` | BLOCKER | open | `subsidio_vivienda_anterior` never collected for `soltero` → the absolute disqualifier never fires for single leads |
-| DATA-002 | reliability | `design.md:405` ↔ `docs/…xlsx` Leads!Q5:Q9 | CRITICAL | open | `rango_salarial` domain is pesos (5 buckets), design uses SMMLV (4) → Bucket 3 always defaults to 10/20 |
-| DATA-003 | reliability | `design.md:408-414` ↔ `docs/…xlsx` Leads!Z5:Z10 | CRITICAL | open | Ahorro substring match: 15-pt tier unreachable; `"Menos de $3 millones"` scores 0 because `"menos"` contains `"no"` |
-| DATA-004 | reliability | `design.md:422-427` ↔ `docs/…xlsx` Leads!U5:U7 | CRITICAL | open | `antiguedad_laboral` domain is `Menos de 1 año/1 a 2 años/Mas de dos años`, design uses `<1y/1-3y/>3y` |
-| DATA-005 | reliability | `design.md:417` ↔ `docs/…xlsx` Leads!AI5:AI9 | CRITICAL | open | `tiempo_compra_deseado` source has 5 options incl. `2 años`; design has 4 → silent 0 pts |
-| DATA-006 | reliability | `specs/agent-tools/spec.md:44` ↔ `docs/…xlsx` | CRITICAL | open | `get_projects(municipio='Bogotá')` returns 0 rows: source municipio is `Bogota` (unaccented) |
-| DATA-007 | reliability | `specs/seed-and-bootstrap/spec.md:16` ↔ `docs/…xlsx` Proyectos | CRITICAL | open | Sheet has **44** data rows, not 43 (asserted 4× across spec + design) |
-| DATA-008 | reliability | `design.md:340` ↔ `docs/…xlsx` Proyectos | CRITICAL | open | `ON CONFLICT (proyecto, modelo)` cannot dedupe `ABETO`/`LA ARBOLEDA` — `modelo` is NULL |
-| LOGIC-002 | reliability | `design.md:141,149` | CRITICAL | open | Router predicates return the literal string `"END"`; the LangGraph sentinel is `END` (`"__end__"`) |
-| LOGIC-003 | reliability | `design.md:178-179` ↔ `docs/Flujo….json` | CRITICAL | open | No underage gate on the afiliado path; flow diagram has `Consultar edad en BD → ¿Es mayor de edad?` |
-| LOGIC-004 | reliability | `design.md:159` | CRITICAL | open | `soltero + afiliado` skips both PAC nodes → `numero_pac`/`condicion_discapacidad_familiar` never collected, +8 bonus unreachable |
-| CODE-001 | reliability | `app/services/inbound_handler.py:58` | CRITICAL | open | Wamid idempotency is dead code — `external_id` is never persisted |
-| SEC-001 | risk | `app/routers/whatsapp.py:107` | CRITICAL | open | `POST /whatsapp/simulate` has no env gate; with `dry_run=false` it is an open outbound-WhatsApp relay |
-| SEC-002 | risk | `app/routers/whatsapp.py:84` | CRITICAL | open | No `X-Hub-Signature-256` verification on the webhook |
-| SDD-005 | reliability | `openspec/config.yaml:6-13` ↔ `pyproject.toml:13-33` | CRITICAL | open | Declared versions contradict the manifest; the langgraph pin cited as a risk mitigation does not exist |
-| DOC-001 | readability | `design.md:493-529` | CRITICAL | open | Persona/slice prompt text contaminated with German + Portuguese + broken Spanish |
-| SDD-006 | reliability | `design.md:5` ↔ `docs/Flujo….json` | CRITICAL | open | "maps one-to-one onto the flow JSON" is false — 11 flow nodes have no design counterpart |
-| SDD-007 | reliability | `docs/Reto_de_vivienda_Descripcion.md:41` | CRITICAL | open | The brief's non-negotiable **90/10 rule** appears in no artifact; the scorer actively works against it |
-| DOC-002 | readability | `README.md:14-25` | CRITICAL | open | Claims an SSE endpoint that does not exist; claims WhatsApp is "stubbed" when it is the only channel built |
-| DATA-009 | reliability | `docs/…xlsx` Leads!C5:C10 | WARNING | open | `tipo_documento` domain is 5 values incl. PEP/PPT; design validator is `(CC\|CE\|TI)` — `TI` is not in the source |
-| DATA-010 | reliability | `docs/…xlsx` Leads!L5:L10 | WARNING | open | `estado_civil` has 6 values (adds Divorciado/Separado/Viudo); design handles 3 |
-| DATA-011 | reliability | `docs/…xlsx` Proyectos | WARNING | open | Areas use comma decimals (`56,29`); no parsing strategy specified for `Numeric(10,2)` |
-| DATA-012 | reliability | `docs/…xlsx` Afiliados Colsubsidio | WARNING | open | Sheet has **0** data rows — all 15 afiliados are invented; spec's distribution requirement is unconstrained |
-| DATA-013 | reliability | `docs/…xlsx` Leads!AM5:AM38 | WARNING | open | `Caja de Compensación` is an enumerated list of 30+; design models it as free-text `String(150)` |
-| LOGIC-005 | reliability | `design.md:424` | WARNING | open | `min(est_pts, 15)` makes the `+3` empleado bonus dead code for `>3y` |
-| LOGIC-006 | reliability | `specs/agent-tools/spec.md:52` ↔ `specs/lead-scoring/spec.md:44` | WARNING | open | `classification` domain contradiction: `{ready,nurture}` vs `{ready,nurture,nurture_social}` |
-| LOGIC-007 | reliability | `design.md:184-187` ↔ `docs/…xlsx` Leads!P2 | WARNING | open | Source says ask `rango_salarial` only if empleado AND not afiliado; design asks in all 4 bundles |
-| LOGIC-008 | reliability | `specs/lead-data-model/spec.md:38` | WARNING | open | "no terminal→profiling transition" has no named enforcement point in the design |
-| RES-001 | resilience | `design.md:582` + `.env.example:1` + `docker-compose.yml:22` | WARNING | open | `DROP TABLE leads CASCADE` gated on `app_env=="development"`, which is the shipped default everywhere |
-| RES-002 | resilience | `app/main.py:38` | WARNING | open | `init_db()` failure is swallowed; `/health` returns 200 with no tables, satisfying the demo spec while broken |
-| RES-003 | resilience | `design.md:590` ↔ `pyproject.toml:40` | WARNING | open | Smoke tests live in `scripts/tests/`, outside `testpaths=["tests"]` — verify's `pytest -q` never runs them |
-| RES-004 | resilience | `Dockerfile:17-18` | WARNING | open | Image copies only `pyproject.toml`, `README.md`, `app/` — `scripts/` and `docs/` are absent, so the seed cannot run on Fly |
-| CODE-002 | readability | `app/core/config.py:56-57` | WARNING | open | `whatsapp_api_version` declared twice |
-| SDD-008 | reliability | `design.md:71,303,480` | WARNING | open | Locked decisions cite "Engram #258" — unauditable from the repo alone |
-| SDD-009 | reliability | `design.md:633` | SUGGESTION | open | Open question (full proyecto column list) still unchecked; blocks the table definition |
-| DOC-003 | readability | `.env.example` / `app/core/config.py` / `docker-compose.yml` | SUGGESTION | open | Three different Postgres credential sets |
+| SDD-001 | reliability | `openspec/changes/colsubsidio-lead-profiling/` | BLOCKER | fixed | `tasks.md` absent; SDD chain broken before apply |
+| SDD-002 | reliability | `app/**` | ~~BLOCKER~~ INFO | info | Zero implementation — the expected state of a change at `proposed`, recorded for scale, not as a defect (reclassified per Appendix B) |
+| SDD-003 | reliability | `specs/seed-and-bootstrap/spec.md` ↔ `design.md:570` | BLOCKER | fixed | Spec MUSTs `scripts/bootstrap_db.py`; design says "no separate bootstrap script" |
+| SDD-004 | reliability | `specs/lead-data-model/spec.md:47` ↔ `specs/lead-scoring/spec.md:14` | BLOCKER | fixed | `score_rating` derived from `score` (0–100) via 150–950 bands — impossible |
+| DATA-001 | reliability | `design.md:164` ↔ `docs/…xlsx` Leads!O6:O8 | BLOCKER | fixed | `empleado_o_independiente` domain is `Termino fijo/indefinido/Prestacion de servicios`, never `"empleado"` → all leads route to `ind_*` bundle |
+| LOGIC-001 | reliability | `design.md:181` ↔ `docs/Flujo….json` | BLOCKER | fixed | `subsidio_vivienda_anterior` never collected for `soltero` → the absolute disqualifier never fires for single leads |
+| DATA-002 | reliability | `design.md:405` ↔ `docs/…xlsx` Leads!Q6:Q10 | CRITICAL | fixed | `rango_salarial` domain is pesos (5 buckets), design uses SMMLV (4) → Bucket 3 always defaults to 10/20 |
+| DATA-003 | reliability | `design.md:408-414` ↔ `docs/…xlsx` Leads!Z6:Z11 | CRITICAL | fixed | Ahorro substring match: 15-pt tier unreachable; `"Menos de $3 millones"` scores 0 because `"menos"` contains `"no"` |
+| DATA-004 | reliability | `design.md:422-427` ↔ `docs/…xlsx` Leads!U6:U8 | CRITICAL | fixed | `antiguedad_laboral` domain is `Menos de 1 año/1 a 2 años/Mas de dos años`, design uses `<1y/1-3y/>3y` |
+| DATA-005 | reliability | `design.md:417` ↔ `docs/…xlsx` Leads!AJ6:AJ10 | CRITICAL | fixed | `tiempo_compra_deseado` source has 5 options incl. `2 años`; design has 4 → silent 0 pts |
+| DATA-006 | reliability | `specs/agent-tools/spec.md:44` ↔ `docs/…xlsx` | CRITICAL | fixed | `get_projects(municipio='Bogotá')` returns 0 rows: source municipio is `Bogota` (unaccented) |
+| DATA-007 | reliability | `specs/seed-and-bootstrap/spec.md:16` ↔ `docs/…xlsx` Proyectos | CRITICAL | fixed | Sheet has **44** data rows, not 43 (asserted 4× across spec + design) |
+| DATA-008 | reliability | `design.md:340` ↔ `docs/…xlsx` Proyectos | CRITICAL | fixed | `ON CONFLICT (proyecto, modelo)` cannot dedupe `ABETO`/`LA ARBOLEDA` — `modelo` is NULL |
+| LOGIC-002 | reliability | `design.md:141,149` | CRITICAL | fixed | Router predicates return the literal string `"END"`; the LangGraph sentinel is `END` (`"__end__"`) |
+| LOGIC-003 | reliability | `design.md:178-179` ↔ `docs/Flujo….json` | CRITICAL | fixed | No underage gate on the afiliado path; flow diagram has `Consultar edad en BD → ¿Es mayor de edad?` |
+| LOGIC-004 | reliability | `design.md:159` | CRITICAL | fixed | `soltero + afiliado` skips both PAC nodes → `numero_pac`/`condicion_discapacidad_familiar` never collected, +8 bonus unreachable |
+| CODE-001 | reliability | `app/services/inbound_handler.py:58` | CRITICAL | open | Wamid idempotency is dead code — `external_id` is never persisted *(now spec'd; code fix pending)* |
+| SEC-001 | risk | `app/routers/whatsapp.py:107` | CRITICAL | open | `POST /whatsapp/simulate` has no env gate; with `dry_run=false` it is an open outbound-WhatsApp relay *(now spec'd; code fix pending)* |
+| SEC-002 | risk | `app/routers/whatsapp.py:84` | CRITICAL | open | No `X-Hub-Signature-256` verification on the webhook *(now spec'd; code fix pending)* |
+| SDD-005 | reliability | `openspec/config.yaml:6-13` ↔ `pyproject.toml:13-33` | CRITICAL | fixed | Declared versions contradict the manifest; the langgraph pin cited as a risk mitigation does not exist |
+| DOC-001 | readability | `design.md:493-529` | CRITICAL | fixed | Persona/slice prompt text contaminated with German + Portuguese + broken Spanish |
+| SDD-006 | reliability | `design.md:5` ↔ `docs/Flujo….json` | CRITICAL | fixed | "maps one-to-one onto the flow JSON" is false — 11 flow nodes have no design counterpart |
+| SDD-007 | reliability | `docs/Reto_de_vivienda_Descripcion.md:41` | CRITICAL | fixed | The brief's non-negotiable **90/10 rule** appears in no artifact; the scorer actively works against it |
+| DOC-002 | readability | `README.md:14-25` | CRITICAL | open | Claims an SSE endpoint that does not exist; claims WhatsApp is "stubbed" when it is the only channel built *(now spec'd; README rewrite pending)* |
+| DATA-009 | reliability | `docs/…xlsx` Leads!C6:C11 | WARNING | fixed | `tipo_documento` domain is 5 values incl. PEP/PPT; design validator is `(CC\|CE\|TI)` — `TI` is not in the source |
+| DATA-010 | reliability | `docs/…xlsx` Leads!L6:L11 | WARNING | fixed | `estado_civil` has 6 values (adds Divorciado/Separado/Viudo); design handles 3 |
+| DATA-011 | reliability | `docs/…xlsx` Proyectos | WARNING | fixed | Areas use comma decimals (`56,29`); no parsing strategy specified for `Numeric(10,2)` |
+| DATA-012 | reliability | `docs/…xlsx` Afiliados Colsubsidio | WARNING | fixed | Sheet has **0** data rows — all 15 afiliados are invented; spec's distribution requirement is unconstrained |
+| DATA-013 | reliability | `docs/…xlsx` Leads!AM6:AM39 | WARNING | fixed | `Caja de Compensación` is an enumerated list of 30+; design models it as free-text `String(150)` |
+| LOGIC-005 | reliability | `design.md:424` | WARNING | fixed | `min(est_pts, 15)` makes the `+3` empleado bonus dead code for `>3y` |
+| LOGIC-006 | reliability | `specs/agent-tools/spec.md:52` ↔ `specs/lead-scoring/spec.md:44` | WARNING | fixed | `classification` domain contradiction: `{ready,nurture}` vs `{ready,nurture,nurture_social}` |
+| LOGIC-007 | reliability | `design.md:184-187` ↔ `docs/…xlsx` Leads!P3 | WARNING | fixed | Source says ask `rango_salarial` only if empleado AND not afiliado; design asks in all 4 bundles |
+| LOGIC-008 | reliability | `specs/lead-data-model/spec.md:38` | WARNING | fixed | "no terminal→profiling transition" has no named enforcement point in the design |
+| RES-001 | resilience | `design.md:582` + `.env.example:1` + `docker-compose.yml:22` | WARNING | fixed | `DROP TABLE leads CASCADE` gated on `app_env=="development"`, which is the shipped default everywhere |
+| RES-002 | resilience | `app/main.py:38` | WARNING | open | `init_db()` failure is swallowed; `/health` returns 200 with no tables, satisfying the demo spec while broken *(now spec'd; code fix pending)* |
+| RES-003 | resilience | `design.md:590` ↔ `pyproject.toml:40` | WARNING | fixed | Smoke tests live in `scripts/tests/`, outside `testpaths=["tests"]` — verify's `pytest -q` never runs them |
+| RES-004 | resilience | `Dockerfile:17-18` | WARNING | open | Image copies only `pyproject.toml`, `README.md`, `app/` — `scripts/` and `docs/` are absent, so the seed cannot run on Fly *(now spec'd; Dockerfile edit pending)* |
+| CODE-002 | readability | `app/core/config.py:56-57` | WARNING | open | `whatsapp_api_version` declared twice *(listed in design §9; code fix pending)* |
+| SDD-008 | reliability | `design.md:71,303,480` | WARNING | fixed | Locked decisions cite "Engram #258" — unauditable from the repo alone |
+| SDD-009 | reliability | `design.md:633` | SUGGESTION | fixed | Open question (full proyecto column list) still unchecked; blocks the table definition |
+| DOC-003 | readability | `.env.example` / `app/core/config.py` / `docker-compose.yml` | SUGGESTION | open | Three different Postgres credential sets *(code/config, out of this pass)* |
 | SDD-010 | reliability | `openspec/config.yaml:3` | SUGGESTION | open | `artifact_store: both` but no in-repo Engram trace |
 
 ---
@@ -891,8 +905,9 @@ uses it; it is a stronger, domain-sourced gate than the team-invented `score >= 
 
 ## Appendix B — Auditor verification pass (2026-07-26)
 
-The orchestrator re-verified 13 of the 35 findings (all 6 BLOCKERS + 7 of
-the 12 CRITICAL) against the actual files in the repository, line by line.
+The orchestrator re-verified 13 of the 35 findings (~~all 6 BLOCKERS + 7 of
+the 12 CRITICAL~~ — **corrected in Appendix C: 5 of 6 BLOCKERS + 8 of the 12
+CRITICAL**) against the actual files in the repository, line by line.
 None of the claims required inference — each was compared against the
 byte-level contents of `openspec/changes/colsubsidio-lead-profiling/**`,
 `app/**`, and `docs/Preguntas y modelo tabla de datos.xlsx` (read with
@@ -932,9 +947,10 @@ Two findings flagged as BLOCKER are arguably **status notes, not defects**:
   artifacts? no") but misleading — it reads like a bug rather than the
   natural progress of an SDD chain.
 - **RES-003 (smoke tests under `scripts/tests/`)**: `scripts/` does not
-  exist in the repo today (it was removed along with `bootstrap_db.py`).
-  The finding describes a future-path defect that the design will create,
-  not a defect in the current repo.
+  exist in the repo today. ~~It was removed along with `bootstrap_db.py`.~~
+  **Correction (see Appendix C):** nothing was removed — `scripts/` has never
+  existed in this repository's history. The finding describes a future-path
+  defect that the design will create, not a defect in the current repo.
 
 Both are still valid forward-looking observations, but the auditor's
 "BLOCKER" / "WARNING" labels overstate the fixability surface for a state
@@ -981,3 +997,163 @@ fix pass:
 - **LOGIC-001/004 source pick** — spreadsheet says `subsidio_vivienda_
   anterior` only for casado/UL; flow diagram asks it in all bundles (incl
   solteros). Either is defensible; the team must record which is authoritative.
+
+---
+
+## Appendix C — Corrections to Appendix B, and to the ledger's own evidence
+
+Appendix B was itself checked. Its 13 verified findings hold — no false positives, no
+mis-attributed evidence. Three defects in the appendix and one class of defect in the
+ledger body are corrected here rather than silently overwritten.
+
+### C.1 — Appendix B miscounts its own sample
+
+The header claims "all 6 BLOCKERS + 7 of the 12 CRITICAL". The table it introduces
+contains 13 rows: **5** blockers (`SDD-001`, `SDD-003`, `SDD-004`, `DATA-001`,
+`LOGIC-001`) and **8** criticals (`DATA-003`, `DATA-006`, `DATA-007`, `LOGIC-002`,
+`CODE-001`, `SEC-001`, `SDD-007`, `DOC-001`). The total, 13, is right; the breakdown is
+not.
+
+`SDD-002` is the missing blocker — and it is the finding Appendix B goes on to
+criticize for severity framing. The critique is correct, but it was levelled at a
+finding the pass did not verify and counted as verified.
+
+### C.2 — Appendix B asserts a git history that never happened
+
+Appendix B's RES-003 note reads "`scripts/` … was removed along with `bootstrap_db.py`".
+Checked against the repository:
+
+```
+git log --all --name-only            | rg "^scripts/"    → no output
+git log --all --diff-filter=D        | rg "scripts/"     → no output
+git log --all -S "bootstrap_db"      → 3 commits, all markdown-only
+```
+
+`scripts/` has never existed in this repository. Nothing was removed. The claim is a
+fabricated causal explanation attached to an otherwise-correct reclassification.
+
+### C.3 — Appendix B's reclassification criterion is applied to one finding only
+
+RES-003 is downgraded because it "describes a future-path defect that the design will
+create, not a defect in the current repo". Applied consistently, that criterion also
+covers `DATA-001` (ranked BLOCKER and confirmed ✅), `DATA-003`, `LOGIC-002`, `LOGIC-003`
+and `LOGIC-004` — all of which describe defects in code that does not exist yet. The
+entire ledger reviews artifacts that specify future code; that is what reviewing a design
+before applying it means. Either the criterion governs the whole table or it governs
+nothing.
+
+The RES-003 downgrade is nonetheless accepted on its merits: `scripts/tests/` sitting
+outside `testpaths` is a design defect, and it is now fixed (tests moved to `tests/`).
+
+### C.4 — "Induction" is not verification
+
+Appendix B extends confidence to the 22 unverified findings "by induction from the
+verified sample — same author, same file:line-style evidence, same verification method".
+
+The sample is not random: it is the 13 highest-severity findings, which received the most
+scrutiny when written. Errors concentrate in the tail — the WARNING and SUGGESTION rows
+drafted fastest — so inducting from the head toward the tail runs against the risk
+gradient. "Same author" is not corroborating evidence; a systematic bias in the author
+appears identically in all 35 findings.
+
+The accurate statement is **13 verified, 22 unverified**. C.1 and C.5 are both defects in
+material the induction claim covered.
+
+### C.5 — The ledger's own spreadsheet references were wrong
+
+The `location` column cited spreadsheet cells derived from a **0-indexed** parser while
+writing them in Excel's **1-indexed** notation, and in two cases pointed at the label
+column instead of the option column. Every finding's *content* was correct — the domains
+reported are the domains in the sheet — but the pointers were not. Corrected in the
+ledger table above:
+
+| Finding | Was | Now | Error |
+|---|---|---|---|
+| DATA-001 | `Leads!N5:N7` | `Leads!O6:O8` | wrong column (N is the label, O the options) + row offset |
+| DATA-005 | `Leads!AI5:AI9` | `Leads!AJ6:AJ10` | wrong column (AI is the label, AJ the options) + row offset |
+| DATA-002 | `Leads!Q5:Q9` | `Leads!Q6:Q10` | row offset |
+| DATA-003 | `Leads!Z5:Z10` | `Leads!Z6:Z11` | row offset |
+| DATA-004 | `Leads!U5:U7` | `Leads!U6:U8` | row offset |
+| DATA-009 | `Leads!C5:C10` | `Leads!C6:C11` | row offset |
+| DATA-010 | `Leads!L5:L10` | `Leads!L6:L11` | row offset |
+| DATA-013 | `Leads!AM5:AM38` | `Leads!AM6:AM39` | row offset |
+| LOGIC-007 | `Leads!P2` | `Leads!P3` | row offset |
+
+Appendix B marked DATA-001 ✅ while citing "sheet N" — it reproduced the ledger's wrong
+pointer rather than detecting it. That is the concrete cost of the induction claim in
+C.4: on the one row where independent verification would have caught this, the pass
+copied the source it was checking.
+
+### C.6 — The ledger's original severity counts were wrong
+
+The §1 summary originally read BLOCKER 6 · CRITICAL 12 · WARNING 14 · SUGGESTION 3 = **35**.
+Parsing the findings table gives BLOCKER 6 · CRITICAL **18** · WARNING **15** ·
+SUGGESTION 3 = **42**. The summary was hand-counted and undercounted CRITICAL by six and
+WARNING by one.
+
+Two consequences:
+
+- Appendix B's "13 of the 35 findings … 37%" inherited the wrong denominator. The real
+  coverage was **13 of 42, or 31%** — and the unverified remainder was **29 findings, not
+  22**. C.4's argument gets stronger, not weaker.
+- Neither the ledger author nor the verification pass caught it, in a document whose own
+  DATA-007 finding is an off-by-one row count. The §1 table is now generated by parsing
+  the findings table, and any future edit to a `severity` or `status` cell must be
+  re-derived the same way rather than adjusted by hand.
+
+---
+
+## Appendix D — Resolution log (2026-07-26)
+
+All artifact-level findings were applied to the specs and the design. Code-level findings
+are now covered by a spec requirement but the code itself is untouched — that is a
+separate pass.
+
+### D.1 — Files changed
+
+| File | Change |
+|---|---|
+| `specs/lead-scoring/spec.md` | Rewritten. New `Source Domain Normalization` requirement; six buckets restated against the real domains with per-bucket scenarios; affiliation-dependent READY threshold; new `Affiliate Share of Qualified Leads (90/10)` requirement. |
+| `specs/lead-data-model/spec.md` | Rewritten. `score_rating` rebound to `score_credito`; 44 rows; `modelo NOT NULL DEFAULT ''`; municipio normalization; comma-decimal parsing; canonical-slug columns; repository-level status guard; caja vocabulary. |
+| `specs/leads-conversational-flow/spec.md` | Rewritten. Underage gate on both branches; `END` sentinel scenario; subsidio previo + PAC + discapacidad collected on every path; `tiene_pareja`/`es_empleado` predicates; contract-type domain; `rango_salarial` gating; new `Documented Deviations From the Source Flow Diagram` requirement. |
+| `specs/agent-tools/spec.md` | Rewritten. Five document types; `save_lead` normalization; `get_projects` keyed on `municipio_normalizado` with the `'VIS'` repair; `classification == status`. |
+| `specs/seed-and-bootstrap/spec.md` | Rewritten. `bootstrap_db.py` retained with rationale; 44 proyectos; destructive reset split into `reset_db.py`; sparse-modelo idempotency; decimal parsing; image contents. |
+| `specs/demo-deployment/spec.md` | Added `Public Deployment Hardening` (simulate gate, webhook signature); health-as-readiness scenario; README-accuracy scenario. |
+| `specs/whatsapp-channel-pipeline/spec.md` | Added the `external_id`-is-actually-persisted scenario; simulator env gate cross-reference. |
+| `design.md` | Rewritten (revision 2). §1 claim corrected; 15-node topology; `END` sentinel in routers; §7 scorer rebuilt on canonical slugs; §7.1 normalizer; §7.2 municipio map; §8 prompts rewritten in Colombian Spanish; §10 migration without an automatic DROP; §11 tests under `tests/`; §13 recorded decisions. Open questions closed. |
+| `proposal.md` | Node list, 44 proyectos, six buckets, thresholds, 90/10 decision, risks, rollback, success criteria, affected areas. |
+| `openspec/config.yaml` | Fabricated exact versions replaced with the manifest's real constraints plus an explicit KNOWN GAP; new design and apply guidelines. |
+
+### D.2 — Two decisions taken and recorded
+
+Both were flagged as user-owned. Each is recorded in the artifacts with its rationale and
+its alternative, so either can be reversed in one edit.
+
+- **LOGIC-001 / LOGIC-004** — the flow diagram governs *who is asked*; the spreadsheet
+  governs *field domains*. `subsidio_vivienda_anterior`, `numero_pac` and
+  `condicion_discapacidad_familiar` move into all four capacity bundles. Recorded in
+  `design.md` §13.2 and in the `leads-conversational-flow` spec.
+- **SDD-007 (90/10)** — distribution target, not a hard gate: no-afiliado scores `0` on
+  the Afiliacion bucket and needs `score >= 75` rather than `60` to reach READY. Recorded
+  in the `lead-scoring` spec, requirement *Affiliate Share of Qualified Leads (90/10)*,
+  with the hard-gate alternative written out.
+
+### D.3 — Still open after this pass
+
+Everything below is code, not artifacts. Each is now required by a spec requirement.
+
+| id | What remains | Task |
+|---|---|---|
+| CODE-001 | Thread `external_id` through `AgentService.send_message` → `persist_user_message`. | 5.1 |
+| CODE-002 | Delete the duplicated `whatsapp_api_version` field. | 0.3 |
+| SEC-001 | Register `/whatsapp/simulate` only under `app_env == "development"`. | 5.3 |
+| SEC-002 | Verify `X-Hub-Signature-256` on the webhook POST. | 5.4 |
+| RES-002 | Make `/health` report readiness; stop swallowing `init_db()` failures. | 5.5 |
+| RES-004 | Dockerfile: copy `scripts/`. | 6.1 |
+| DOC-002 | Rewrite the README's "What works" / "What is not done" sections. | 6.4 |
+| DOC-003 | Reconcile the three Postgres credential sets. | 6.3 |
+| SDD-010 | Mirror the locked decisions into the repo so they survive without Engram. | 6.5 |
+| SDD-002 | Reclassified INFO — resolves itself at apply. | — |
+
+`SDD-001` closed on 2026-07-26: `tasks.md` written, 43 tasks across 7 phases, every open
+finding assigned to a numbered task.

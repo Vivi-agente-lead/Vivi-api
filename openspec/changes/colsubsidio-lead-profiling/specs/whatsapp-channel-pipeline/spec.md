@@ -23,9 +23,20 @@ The system MUST accept WhatsApp Cloud API webhooks at `POST /whatsapp/webhook` a
 - THEN the system MUST NOT invoke `AgentService.send_message` a second time
 - AND the handler returns 200 OK without side effects
 
+#### Scenario: The wamid is actually persisted
+
+- GIVEN `InboundMessageHandler.handle` receives an `external_id`
+- WHEN the inbound user message is written
+- THEN that `external_id` is stored on the `messages` row
+- AND `AgentService.send_message` MUST accept and forward it to `MessageService.persist_user_message`
+- AND the duplicate check `MessageRepository.find_by_external_id` MUST be able to match a real value — today the column is never written, so the guard never fires and a Meta retry re-runs the whole agent turn and sends a second reply
+
 ### Requirement: Dev Simulator Endpoint
 
 The system MUST expose `POST /whatsapp/simulate?text=&from=&dry_run=` for local development that bypasses Meta verification and drives the full agent + persistence pipeline. With `dry_run=true`, the simulator MUST execute the agent and capture the would-be outbound reply without sending it to Meta.
+
+The route MUST be registered only when `settings.app_env == "development"` — see the
+`Public Deployment Hardening` requirement in `demo-deployment`.
 
 #### Scenario: dry_run logs the would-be reply
 
