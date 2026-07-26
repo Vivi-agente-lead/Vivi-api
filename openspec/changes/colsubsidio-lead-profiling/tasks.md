@@ -49,37 +49,37 @@ the change's stated risk mitigation did not exist.
 
 ## Phase 1 — Data layer
 
-- [ ] **1.1 Canonical slug constants**
+- [x] **1.1 Canonical slug constants**
   `app/models/constants.py` — the seven enumerated domains from the
   `Source Domain Normalization` requirement, plus `ESTADO_CIVIL_CON_PAREJA` and
   `CONTRATO_EMPLEADO` as the predicate source sets, and the `status` domain
   `{profiling, ready, nurture, nurture_social}`.
   *Files*: `app/models/constants.py`
 
-- [ ] **1.2 Normalizer tests (write first)**
+- [x] **1.2 Normalizer tests (write first)**
   `tests/test_domain_normalizer.py` — every verbatim label from the workbook maps to
   its slug, with and without accents and casing; unknown values return `None`; the
   municipio table maps all nine lead-facing options; `'VIS'` repairs to `'Bogota'`.
   *Files*: `tests/test_domain_normalizer.py` · *spec*: `lead-scoring` §Source Domain Normalization
 
-- [ ] **1.3 Domain normalizer**
+- [x] **1.3 Domain normalizer**
   `app/services/domain_normalizer.py` — exact lookup after case-folding and
   accent-stripping. Never substring-matches. `normalize(field, raw) -> str | None`
   plus `normalize_municipio` and `repair_catalogo_municipio`.
   *Files*: `app/services/domain_normalizer.py` · *closes*: DATA-001, DATA-002, DATA-004, DATA-005, DATA-006, DATA-009, DATA-010
 
-- [ ] **1.4 Replace `LeadEntity` with `LeadColsubsidioEntity`**
+- [x] **1.4 Replace `LeadEntity` with `LeadColsubsidioEntity`**
   Per `design.md` §6. Enumerated columns hold slugs; `municipio_normalizado` indexed;
   `ix_leads_status_afiliado` for the 90/10 query; `normalization_notes` JSONB.
   *Files*: `app/models/lead_model.py`, `app/models/__init__.py` · *closes*: SDD-004
 
-- [ ] **1.5 Afiliado and proyecto entities**
+- [x] **1.5 Afiliado and proyecto entities**
   `AfiliadoColsubsidioEntity` (`fecha_nacimiento` as a real `Date`) and
   `ProyectoColsubsidioEntity` (12 columns; **`modelo` is `NOT NULL DEFAULT ''`** so
   the `(proyecto, modelo)` key matches the two blank-modelo rows).
   *Files*: `app/models/afiliado_model.py`, `app/models/proyecto_model.py`, `app/models/__init__.py` · *closes*: DATA-008
 
-- [ ] **1.6 Repositories**
+- [x] **1.6 Repositories**
   `lead_repository`: `find_by_conversation_id`, `upsert_by_conversation_id` with
   field-merge semantics **and the terminal-status guard** (a terminal status may not
   change — the guard lives here so all three writers inherit it).
@@ -87,13 +87,13 @@ the change's stated risk mitigation did not exist.
   `(proyecto, modelo)`.
   *Files*: `app/models/repositories/{lead,afiliado,proyecto}_repository.py` · *closes*: LOGIC-008
 
-- [ ] **1.7 Bootstrap and reset scripts**
+- [x] **1.7 Bootstrap and reset scripts**
   `scripts/bootstrap_db.py` — `create_all(checkfirst=True)`, real exit code, **no
   DROP under any environment**. `scripts/reset_db.py` — destructive, requires `--yes`,
   never invoked by the server.
   *Files*: `scripts/bootstrap_db.py`, `scripts/reset_db.py` · *closes*: SDD-003, RES-001
 
-- [ ] **1.8 Seed — 44 proyectos**
+- [x] **1.8 Seed — 44 proyectos**
   Transcribe sheet `Proyectos` verbatim. Parse comma decimals (`56,29` → `56.29`);
   blank numeric cells → NULL, not `0`; blank `modelo` → `''`. Preserve the
   `VIBO ONCE` `B2` (`tipo`=`municipio`=`'VIS'`), `VERSALLES` `E`
@@ -101,7 +101,7 @@ the change's stated risk mitigation did not exist.
   `INSERT … ON CONFLICT (proyecto, modelo) DO NOTHING`.
   *Files*: `scripts/seed_colsubsidio.py` · *closes*: DATA-007, DATA-011
 
-- [ ] **1.9 Seed — 15 afiliados**
+- [x] **1.9 Seed — 15 afiliados**
   The source sheet has **zero** afiliado rows; all 15 are fabricated here. Cover all
   three `categoria_afiliado` values and every one of the six credit bands; at least
   one with `ha_recibido_subsidio=true`. Demo stars: `1010101010` Andrea Marín (A, 880),
@@ -109,13 +109,13 @@ the change's stated risk mitigation did not exist.
   `DELETE WHERE is_seed=true` then re-INSERT.
   *Files*: `scripts/seed_colsubsidio.py` · *closes*: DATA-012
 
-- [ ] **1.10 Seed idempotency test**
+- [x] **1.10 Seed idempotency test**
   `tests/test_seed_idempotency.py` — run twice; assert `count(proyectos)==44`,
   `count(afiliados WHERE is_seed)==15`, and that `ABETO` and `LA ARBOLEDA` each appear
   exactly once. Skip cleanly when no Postgres is reachable.
   *Files*: `tests/test_seed_idempotency.py` · *closes*: RES-003 (location)
 
-- [ ] **1.11 Caja de compensación vocabulary**
+- [x] **1.11 Caja de compensación vocabulary**
   The 30+ enumerated cajas from the workbook as a constant; `otra_caja_compensacion`
   accepts a member, `ninguna`, or NULL.
   *Files*: `app/models/constants.py` · *closes*: DATA-013
