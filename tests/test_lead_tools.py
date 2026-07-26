@@ -501,7 +501,9 @@ async def test_classify_lead_returns_a_verdict_whose_classification_is_the_statu
 
     verdict = json.loads(await classify_lead.ainvoke({}, config=_config()))
 
-    assert verdict["status"] == "ready"
+    # v2 renames the terminal status vocabulary: ready → calificado
+    # (docs/v2-impact-analysis.md §7).
+    assert verdict["status"] == "calificado"
     assert verdict["classification"] == verdict["status"]
     assert verdict["status"] in STATUS_DOMAIN
     assert verdict["score_rating"] == "Excelente"
