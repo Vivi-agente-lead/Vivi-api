@@ -9,6 +9,13 @@ datos.xlsx`, sheet `Leads`) MUST map to its canonical slug, with and without
 accents and casing; unrecognized values return None; the municipio table maps
 all nine lead-facing options; the corrupt catalogue value `'VIS'` is repaired
 to `'Bogota'` at lookup time.
+
+v2 migration (``docs/v2-impact-analysis.md``): ``tipo_documento`` gains a
+sixth option (`Carné Diplomático`), ``contrato_laboral`` gains a fourth
+(`Independiente`, distinct from `Prestacion de servicios`), the
+``antiguedad_laboral`` tests are removed (the field no longer exists), and
+tests are added for the two new fields (`interes_afiliacion`,
+`preferencia_vis`).
 """
 
 from __future__ import annotations
@@ -25,7 +32,7 @@ from app.services.domain_normalizer import (
 )
 
 
-# ── tipo_documento (5 source types) ────────────────────────────────────────
+# ── tipo_documento (6 source types — v2 adds Carné Diplomático) ────────────
 @pytest.mark.parametrize(
     "raw,slug",
     [
@@ -34,6 +41,7 @@ from app.services.domain_normalizer import (
         ("PASAPORTE", "PA"),
         ("permiso especial de permanencia", "PEP"),
         ("Permiso por Protección Temporal", "PPT"),
+        ("Carné Diplomático", "CD"),
     ],
 )
 def test_normalize_tipo_documento(raw, slug):
@@ -74,14 +82,16 @@ def test_normalize_estado_civil_casing_and_accents():
     assert normalize("estado_civil", "soltero") == "soltero"
 
 
-# ── contrato_laboral (3-value domain; note trailing-space quirk on Termino
-#    indefinido in the source sheet) ─────────────────────────────────────────
+# ── contrato_laboral (4-value domain in v2 — `Independiente` is now its own
+#    option, separate from `Prestacion de servicios`; column O of the v2
+#    sheet) ───────────────────────────────────────────────────────────────
 @pytest.mark.parametrize(
     "raw,slug",
     [
         ("Termino fijo", "termino_fijo"),
         ("Termino indefinido ", "termino_indefinido"),  # source has trailing space
         ("Prestacion de servicios", "prestacion_servicios"),
+        ("Independiente", "independiente"),
     ],
 )
 def test_normalize_contrato_laboral(raw, slug):
@@ -114,23 +124,36 @@ def test_normalize_rango_salarial_accent_insensitive():
     assert normalize("rango_salarial", "Más de 10 millones") == "mas_10m"
 
 
-# ── antiguedad_laboral (3-value domain) ────────────────────────────────────
+# v2 removes `antiguedad_laboral` entirely (docs/v2-impact-analysis.md §3):
+# the field is absent from the sheet's capacity question, so there is no
+# longer a table to normalize it against.
+def test_antiguedad_laboral_is_no_longer_a_recognized_field():
+    assert normalize("antiguedad_laboral", "Mas de dos años") is None
+
+
+# ── interes_afiliacion (v2, no-afiliado path only) ─────────────────────────
 @pytest.mark.parametrize(
     "raw,slug",
     [
-        ("Menos de 1 año", "menos_1a"),
-        ("1 a 2 años", "1_2a"),
-        ("Mas de dos años", "mas_2a"),
+        (
+            "No, estoy afiliado a otra caja de compensación",
+            "afiliado_otra_caja",
+        ),
+        ("Si estoy interesado en afiliarme", "interesado_afiliarse"),
+        ("No, prefiero en otro momento.", "prefiere_otro_momento"),
     ],
 )
-def test_normalize_antiguedad_laboral(raw, slug):
-    assert normalize("antiguedad_laboral", raw) == slug
+def test_normalize_interes_afiliacion(raw, slug):
+    assert normalize("interes_afiliacion", raw) == slug
 
 
-def test_normalize_antiguedad_laboral_casing():
-    assert normalize("antiguedad_laboral", "menos de 1 año") == "menos_1a"
-    assert normalize("antiguedad_laboral", "MENOS DE 1 AÑO") == "menos_1a"
-    assert normalize("antiguedad_laboral", "mas de dos años") == "mas_2a"
+# ── preferencia_vis (v2) ────────────────────────────────────────────────────
+@pytest.mark.parametrize(
+    "raw,slug",
+    [("VIS", "vis"), ("NO VIS", "no_vis"), ("Ambas", "ambas")],
+)
+def test_normalize_preferencia_vis(raw, slug):
+    assert normalize("preferencia_vis", raw) == slug
 
 
 # ── ahorros_o_cesantias (6-value domain) — guards the substring bug ─────────
@@ -186,12 +209,15 @@ def test_normalize_tiempo_compra_accents():
     "field,slug",
     [
         ("tipo_documento", "CC"),
+        ("tipo_documento", "CD"),
         ("estado_civil", "soltero"),
         ("contrato_laboral", "prestacion_servicios"),
+        ("contrato_laboral", "independiente"),
         ("rango_salarial", "mas_10m"),
-        ("antiguedad_laboral", "mas_2a"),
         ("ahorros_o_cesantias", "menos_3m"),
         ("tiempo_compra_deseado", "no_se"),
+        ("interes_afiliacion", "afiliado_otra_caja"),
+        ("preferencia_vis", "vis"),
     ],
 )
 def test_canonical_slug_passes_through(field, slug):
@@ -275,15 +301,19 @@ def test_normalize_bool_none_returns_none():
 
 
 def test_boolean_fields_are_routed_through_normalize():
-    """Every boolean lead column resolves through the generic `normalize`."""
+    """Every boolean lead column resolves through the generic `normalize`.
+
+    v2 removes `condicion_discapacidad_familiar` and `cabeza_de_hogar` (fields
+    no longer collected). `otra_caja_compensacion` is a `Boolean` column too,
+    but is deliberately NOT here: it is derived from `interes_afiliacion`,
+    never normalized from raw yes/no input.
+    """
     assert BOOLEAN_FIELDS == frozenset(
         {
             "subsidio_vivienda_anterior",
             "tiene_vivienda_propia",
             "tiene_creditos_activos",
-            "condicion_discapacidad_familiar",
             "afiliado_colsubsidio",
-            "cabeza_de_hogar",
         }
     )
     for field in BOOLEAN_FIELDS:

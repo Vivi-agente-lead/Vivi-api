@@ -25,6 +25,13 @@ score. A judgement call there would make the score a function of who is asking.
 Categorical fields fall back to a small synonym table of the shapes people
 actually type. The table maps to slugs only — adding an entry can never widen
 the domain.
+
+v2 migration (``docs/v2-impact-analysis.md``): ``antiguedad_laboral`` is
+removed (the field it backed no longer exists); ``independiente`` is now its
+own slug, distinct from ``prestacion_servicios`` (sheet column O); a
+``tipo_documento`` synonym is added for the new ``Carné Diplomático`` option;
+and small synonym tables are added for the two new fields
+(``interes_afiliacion``, ``preferencia_vis``).
 """
 
 from __future__ import annotations
@@ -113,47 +120,6 @@ def _bucket(value: Decimal, bands: tuple[tuple[Decimal, str], ...], over: str) -
     return over
 
 
-# ── Durations ──────────────────────────────────────────────────────────────
-_YEAR_WORDS: Final[dict[str, int]] = {
-    "un": 1, "uno": 1, "una": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5,
-    "seis": 6, "siete": 7, "ocho": 8, "nueve": 9, "diez": 10,
-}
-
-
-def _years(folded: str) -> Decimal | None:
-    """Duration in years, converting a months figure when that is what was said."""
-    match = _NUMBER.search(folded)
-    if match is not None:
-        value = _to_decimal(match.group())
-    else:
-        value = next(
-            (Decimal(n) for word, n in _YEAR_WORDS.items() if f" {word} " in f" {folded} "),
-            None,
-        )
-    if value is None or value < 0:
-        return None
-    if re.search(r"\bmes(?:es)?\b", folded):
-        value /= 12
-    return value
-
-
-def _antiguedad(folded: str) -> str | None:
-    years = _years(folded)
-    if years is None:
-        return None
-    # "mas de dos años" and "menos de un año" carry their answer in the
-    # qualifier, not in the number.
-    if re.search(r"\bmas de\b", folded) and years >= 2:
-        return "mas_2a"
-    if re.search(r"\bmenos de\b", folded) and years <= 1:
-        return "menos_1a"
-    if years < 1:
-        return "menos_1a"
-    if years <= 2:
-        return "1_2a"
-    return "mas_2a"
-
-
 # ── Categorical synonyms ───────────────────────────────────────────────────
 # Keys are folded. Values are canonical slugs, so no entry can widen a domain.
 _SYNONYMS: Final[dict[str, dict[str, str]]] = {
@@ -166,14 +132,19 @@ _SYNONYMS: Final[dict[str, dict[str, str]]] = {
         "contrato indefinido": "termino_indefinido",
         "de planta": "termino_indefinido",
         "nomina": "termino_indefinido",
-        "independiente": "prestacion_servicios",
-        "soy independiente": "prestacion_servicios",
         "prestacion": "prestacion_servicios",
         "prestacion de servicio": "prestacion_servicios",
+        "prestacion de servicios": "prestacion_servicios",
         "servicios": "prestacion_servicios",
-        "freelance": "prestacion_servicios",
-        "por mi cuenta": "prestacion_servicios",
-        "trabajo por mi cuenta": "prestacion_servicios",
+        # v2 sheet column O separates `Independiente` from `Contrato de
+        # prestación de servicios` (docs/v2-impact-analysis.md §4). Plain
+        # "independiente" and the colloquial freelance/self-employed phrasings
+        # resolve to the new, distinct slug.
+        "independiente": "independiente",
+        "soy independiente": "independiente",
+        "freelance": "independiente",
+        "por mi cuenta": "independiente",
+        "trabajo por mi cuenta": "independiente",
     },
     "estado_civil": {
         "soltera": "soltero",
@@ -192,6 +163,7 @@ _SYNONYMS: Final[dict[str, dict[str, str]]] = {
         "ce": "CE", "cedula de extranjeria": "CE", "extranjeria": "CE",
         "pa": "PA", "pasaporte": "PA",
         "pep": "PEP", "ppt": "PPT",
+        "cd": "CD", "carne diplomatico": "CD", "diplomatico": "CD",
     },
     "tiempo_compra_deseado": {
         "ya": "3_meses", "ahora": "3_meses", "lo antes posible": "3_meses",
@@ -202,16 +174,37 @@ _SYNONYMS: Final[dict[str, dict[str, str]]] = {
         "no se": "no_se", "ni idea": "no_se", "todavia no se": "no_se",
         "no estoy seguro": "no_se", "no estoy segura": "no_se",
     },
+    # v2: `¿Te gustaría iniciar tu proceso de afiliación a Colsubsidio?`
+    "interes_afiliacion": {
+        "afiliado a otra caja": "afiliado_otra_caja",
+        "estoy afiliado a otra caja": "afiliado_otra_caja",
+        "ya tengo otra caja": "afiliado_otra_caja",
+        "me interesa afiliarme": "interesado_afiliarse",
+        "quiero afiliarme": "interesado_afiliarse",
+        "si me interesa": "interesado_afiliarse",
+        "ahora no": "prefiere_otro_momento",
+        "en otro momento": "prefiere_otro_momento",
+        "despues": "prefiere_otro_momento",
+    },
+    # v2: `¿Te interesan vivienda VIS, NO VIS o ambas?`
+    "preferencia_vis": {
+        "vis": "vis",
+        "no vis": "no_vis",
+        "novis": "no_vis",
+        "ambas": "ambas",
+        "las dos": "ambas",
+        "cualquiera": "ambas",
+    },
 }
 # `TI` is deliberately mapped to a falsy value above so the loop below skips it:
-# the source offers five document types and `TI` is not one of them.
+# the source offers six document types and `TI` is not one of them.
 _SYNONYMS["tipo_documento"] = {
     k: v for k, v in _SYNONYMS["tipo_documento"].items() if v
 }
 
 
 _NUMERIC_FIELDS: Final[frozenset[str]] = frozenset(
-    {"rango_salarial", "ahorros_o_cesantias", "antiguedad_laboral"}
+    {"rango_salarial", "ahorros_o_cesantias"}
 )
 
 
@@ -235,9 +228,6 @@ def interpret(field: str, raw: Any) -> str | None:
             return "ninguno"
         amount = _amount(folded)
         return _bucket(amount, _AHORRO_BANDS, "mas_40m") if amount else None
-
-    if field == "antiguedad_laboral":
-        return _antiguedad(folded)
 
     table = _SYNONYMS.get(field)
     if not table:
