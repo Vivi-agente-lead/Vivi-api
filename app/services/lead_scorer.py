@@ -25,9 +25,11 @@ The persisted ``lead.status`` MUST carry the same value as the returned
 
 from __future__ import annotations
 
+import math
 from typing import Any, Mapping, TypedDict
 
 from app.services.credit_bands import band_from_score_credito, simulate_bureau_cedula
+from app.services.domain_normalizer import normalize_bool
 
 __all__ = [
     "READY_THRESHOLD_AFILIADO",
@@ -117,6 +119,53 @@ def _get(profile: Mapping[str, Any] | None, key: str, default: Any = None) -> An
     return profile.get(key, default)
 
 
+def _as_int(value: Any) -> int | None:
+    """Best-effort integer coercion; an uncoercible value behaves as absent.
+
+    LLM-supplied numerics plausibly arrive as strings (``"2"``, ``"2.0"``), and
+    the scorer must stay a total function of its inputs — comparing ``"2" > 0``
+    raised ``TypeError``. ``bool`` is deliberately rejected: a flag is not a
+    count.
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value) if math.isfinite(value) else None
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    try:
+        return int(text)
+    except ValueError:
+        pass
+    try:
+        as_float = float(text)
+    except ValueError:
+        return None
+    return int(as_float) if math.isfinite(as_float) else None
+
+
+def _int_field(profile: Mapping[str, Any] | None, key: str) -> int | None:
+    """Read a numeric lead field, coerced. Uncoercible → ``None`` (absent)."""
+    return _as_int(_get(profile, key))
+
+
+def _flag(profile: Mapping[str, Any] | None, key: str) -> bool | None:
+    """Read a boolean lead field through the domain normalizer.
+
+    The workbook stores its yes/no columns as the literals ``SI`` / ``NO``, and
+    an LLM may echo either those or a real ``bool``. Routing every boolean read
+    through :func:`normalize_bool` keeps the scorer's ``is True`` tests keyed
+    off one vocabulary. An unrecognized value yields ``None`` (fail closed) —
+    it is treated as absent, never as a silent ``False``.
+    """
+    return normalize_bool(_get(profile, key))
+
+
 def score_lead(
     lead: Mapping[str, Any] | None,
     afiliado: Mapping[str, Any] | None = None,
@@ -139,9 +188,12 @@ def score_lead(
 
     # ── Bucket 1: Credito (max 25) ───────────────────────────────────────────
     # Afiliado's score_credito is the afiliado record's; no-afiliado's is
-    # cedula-derived from the bureau simulation.
-    if afiliado and afiliado.get("score_credito") is not None:
-        score_credito = afiliado.get("score_credito")
+    # cedula-derived from the bureau simulation. An afiliado whose
+    # score_credito is NULL stays on the afiliado branch and contributes 0 /
+    # "Malo" — falling through to the simulation would fabricate a credit band
+    # out of their own document number (spec Bucket 1).
+    if afiliado:
+        score_credito = _as_int(afiliado.get("score_credito"))
         credit_pts, rating_label = band_from_score_credito(score_credito)
     else:
         score_credito = simulate_bureau_cedula(_get(lead, "numero_documento", ""))
@@ -178,18 +230,22 @@ def score_lead(
         )
 
     # ── Red flags (additive, applied to the sum, then clamped) ───────────────
+    # Every lead-supplied boolean is read through the normalizer (`_flag`), so
+    # the workbook's `SI`/`NO` literals drive these rules. `vis_recommended` is
+    # derived by the scoring node's project lookup, never collected, so it is
+    # already a real bool.
     vis_flag = (
         _get(lead, "vis_recommended") is True
-        and _get(lead, "tiene_vivienda_propia") is True
+        and _flag(lead, "tiene_vivienda_propia") is True
     )
     red = 0
     if vis_flag:
         red -= 15
-    if _get(lead, "tiene_creditos_activos") is True:
+    if _flag(lead, "tiene_creditos_activos") is True:
         red -= 5
     if (
-        _get(lead, "condicion_discapacidad_familiar") is True
-        or (_get(lead, "numero_pac") or 0) > 0
+        _flag(lead, "condicion_discapacidad_familiar") is True
+        or (_int_field(lead, "numero_pac") or 0) > 0
     ):
         red += 8
     # USER-LOCKED: subsidio_vivienda_anterior never subtracts from the score —
@@ -208,7 +264,7 @@ def score_lead(
 
     # ── Classification ───────────────────────────────────────────────────────
     is_afiliado = bool(afiliado)
-    ha_recibido_subsidio = _get(lead, "subsidio_vivienda_anterior") is True
+    ha_recibido_subsidio = _flag(lead, "subsidio_vivienda_anterior") is True
     classification = classify_lead(score, is_afiliado, ha_recibido_subsidio)
 
     # ── Reasoning ────────────────────────────────────────────────────────────
@@ -294,23 +350,23 @@ def build_scoring_result(
 
     vis_flag = (
         _get(lead, "vis_recommended") is True
-        and _get(lead, "tiene_vivienda_propia") is True
+        and _flag(lead, "tiene_vivienda_propia") is True
     )
     red = 0
     if vis_flag:
         red -= 15
-    if _get(lead, "tiene_creditos_activos") is True:
+    if _flag(lead, "tiene_creditos_activos") is True:
         red -= 5
     if (
-        _get(lead, "condicion_discapacidad_familiar") is True
-        or (_get(lead, "numero_pac") or 0) > 0
+        _flag(lead, "condicion_discapacidad_familiar") is True
+        or (_int_field(lead, "numero_pac") or 0) > 0
     ):
         red += 8
 
     breakdown: dict[str, int] = {
         "credito": band_from_score_credito(
-            (afiliado or {}).get("score_credito")
-            if afiliado and afiliado.get("score_credito") is not None
+            _as_int(afiliado.get("score_credito"))
+            if afiliado
             else simulate_bureau_cedula(_get(lead, "numero_documento", ""))
         )[0],
         "afiliacion": CATEGORIA_PTS.get(cat, 0),

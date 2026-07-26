@@ -52,8 +52,16 @@ class AgentService:
         self,
         conversation_id: uuid.UUID,
         payload: MessageCreate,
+        *,
+        external_id: str | None = None,
     ) -> dict:
-        """Validate, persist user msg, invoke graph, persist assistant turn."""
+        """Validate, persist user msg, invoke graph, persist assistant turn.
+
+        `external_id` is the channel-native message id (e.g. a WhatsApp
+        `wamid`), forwarded to `MessageService.persist_user_message` so the
+        duplicate-delivery guard in `MessageRepository.find_by_external_id`
+        has a real value to match against.
+        """
         content = (payload.content or "").strip()
         if not content:
             raise ValidationError("El mensaje no puede estar vacío.")
@@ -64,7 +72,7 @@ class AgentService:
 
         conv = await self.conversation_service.get_or_404(conversation_id)
 
-        await self.message_service.persist_user_message(conv.id, content)
+        await self.message_service.persist_user_message(conv.id, content, external_id=external_id)
 
         thread_id = build_thread_id(conv.id)
         tool_context = ToolContext(session=self.session, conversation_id=conv.id)

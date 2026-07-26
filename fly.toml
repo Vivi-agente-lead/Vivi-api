@@ -1,0 +1,61 @@
+# fly.toml — Vivi API, Colsubsidio lead-profiling demo
+#
+# US region deploy exists for one reason: OpenAI returns a 403 geo-block from
+# Venezuela, and the juror demo cannot afford to hit it mid-conversation
+# (design.md §12, risk "Demo OpenAI 403 from Venezuela").
+#
+# This file is authored, NOT deployed, by this change (task 6.2 is explicitly
+# out of scope — it needs a Fly.io account this agent does not have). Replace
+# `<your-fly-app-name>` and run the commands in README.md's "Deploy to Fly.io"
+# section yourself.
+#
+# Secrets (never commit these — set with `fly secrets set`):
+#   OPENAI_API_KEY, WHATSAPP_API_TOKEN, WHATSAPP_WEBHOOK_VERIFY_TOKEN,
+#   POSTGRES_PASSWORD (or a full POSTGRES_* set pointing at a managed Postgres).
+#
+# Known gap: Phase 5 (tasks 5.1-5.5 in
+# openspec/changes/colsubsidio-lead-profiling/tasks.md) — the webhook signature
+# check, the /simulate env gate, and the /health readiness probe — has not
+# landed on this branch. Setting APP_ENV=production here does NOT yet close
+# `/simulate`, because app/routers/whatsapp.py does not read app_env for that
+# route. See README.md "Known limitations" before treating this as a locked-down
+# public deploy.
+
+app = "<your-fly-app-name>"
+primary_region = "iad" # US region (Ashburn, VA) — bypasses the OpenAI VE geo-block
+
+[build]
+
+[env]
+  APP_ENV = "production"
+  APP_HOST = "0.0.0.0"
+  APP_PORT = "8000"
+  APP_LOG_LEVEL = "INFO"
+  LLM_CHECKPOINTER = "postgres"
+  OPENAI_MODEL = "gpt-5-mini"
+  OPENAI_TEMPERATURE = "0.3"
+  AGENT_MAX_TURNS = "10"
+  AGENT_TIMEOUT_SECONDS = "60"
+  LEAD_PROFILER_ENABLED = "true"
+  WHATSAPP_API_VERSION = "v25.0"
+  # POSTGRES_HOST / POSTGRES_PORT / POSTGRES_USER / POSTGRES_DB: point these at
+  # your Fly Postgres (or external managed Postgres) app. POSTGRES_PASSWORD is a
+  # secret, not an env var — see `fly secrets set` above.
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "off"   # keep the demo warm for the juror session
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "15s"
+    method = "GET"
+    timeout = "5s"
+    path = "/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

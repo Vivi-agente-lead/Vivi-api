@@ -68,7 +68,7 @@ class InboundMessageHandler:
         try:
             agent = AgentService(self.session)
             payload = MessageCreate(content=text)
-            result = await agent.send_message(conv.id, payload)
+            result = await agent.send_message(conv.id, payload, external_id=external_id)
         except Exception as exc:
             logger.exception("inbound.agent_failed", extra={"conversation_id": str(conv.id)})
             reply = "Disculpá, tuve un problema para procesar tu mensaje. Intentá nuevamente."

@@ -80,6 +80,38 @@ TIEMPO_COMPRA_DESEADO: Final[dict[str, str]] = {
     "no sé": "no_se",
 }
 
+# ── Boolean domain ─────────────────────────────────────────────────────────
+# The `Leads` sheet stores its yes/no columns as the literals `SI` / `NO`, not
+# as Python booleans. The scorer tests `is True`, so an un-normalized `'SI'`
+# silently disabled every boolean rule — including the absolute
+# subsidio-previo disqualifier. Same source-vocabulary-vs-code-vocabulary
+# defect class as DATA-001..005, in the booleans.
+BOOLEAN: Final[dict[str, bool]] = {
+    "si": True,
+    "sí": True,
+    "no": False,
+    "true": True,
+    "false": False,
+    "verdadero": True,
+    "falso": False,
+    "1": True,
+    "0": False,
+}
+
+# Boolean `leads` columns. Registered here so `normalize(field, raw)` routes
+# them through the boolean domain instead of returning None for an unknown
+# field, and so every collection boundary has a single list to iterate.
+BOOLEAN_FIELDS: Final[frozenset[str]] = frozenset(
+    {
+        "subsidio_vivienda_anterior",
+        "tiene_vivienda_propia",
+        "tiene_creditos_activos",
+        "condicion_discapacidad_familiar",
+        "afiliado_colsubsidio",
+        "cabeza_de_hogar",
+    }
+)
+
 # Field name → verbatim→slug table. The keys here are the `lead_profile` /
 # `leads` column names.
 _TABLES: Final[dict[str, dict[str, str]]] = {
@@ -151,21 +183,52 @@ _LOOKUPS: Final[dict[str, dict[str, str]]] = {
 
 _MUNICIPIO_LOOKUP: Final[dict[str, str]] = _build_lookup(MUNICIPIO_LEAD_TO_CATALOGO)
 
+_BOOLEAN_LOOKUP: Final[dict[str, bool]] = {_fold(k): v for k, v in BOOLEAN.items()}
+
 
 # ── Public API ─────────────────────────────────────────────────────────────
-def normalize(field: str, raw: str | None) -> str | None:
+def normalize_bool(raw: object) -> bool | None:
+    """Normalize a workbook yes/no value to a real Python boolean.
+
+    Accepts the `Leads` sheet vocabulary (`SI` / `NO`, any casing, with or
+    without the accent on `Sí`), the usual `true`/`false` and
+    `verdadero`/`falso` spellings, `1`/`0`, and real `bool`s.
+
+    Returns:
+        True, False, or None when the value matches nothing. Fails closed —
+        an unrecognized value is NEVER coerced to False, so the consuming rule
+        treats it as absent instead of as a silent negative (spec scenario
+        *Unrecognized value fails closed*).
+    """
+    if raw is None:
+        return None
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, float) and not raw.is_integer():
+        return None
+    if isinstance(raw, float):
+        raw = int(raw)
+    key = _fold(str(raw))
+    if not key:
+        return None
+    return _BOOLEAN_LOOKUP.get(key)
+
+
+def normalize(field: str, raw: object) -> str | bool | None:
     """Exact, case- and accent-insensitive lookup of an enumerated lead field.
 
     Args:
         field: one of the seven enumerated lead-field names
             (tipo_documento, estado_civil, contrato_laboral, rango_salarial,
-            antiguedad_laboral, ahorros_o_cesantias, tiempo_compra_deseado).
-        raw: the verbatim source label OR an already-canonical slug.
+            antiguedad_laboral, ahorros_o_cesantias, tiempo_compra_deseado)
+            or one of :data:`BOOLEAN_FIELDS`.
+        raw: the verbatim source label OR an already-canonical slug (for a
+            boolean field, the workbook `SI`/`NO` literal or a real bool).
 
     Returns:
-        The canonical slug, or None if the value matches no verbatim label and
-        no canonical slug for the field. None in → None out. An unknown field
-        name → None.
+        The canonical slug — a `bool` for a field in :data:`BOOLEAN_FIELDS` —
+        or None if the value matches no verbatim label and no canonical slug
+        for the field. None in → None out. An unknown field name → None.
 
     Never guesses: an unrecognized value yields None so the consuming bucket
     contributes 0, rather than silently landing on a mid-range default. Never
@@ -173,6 +236,8 @@ def normalize(field: str, raw: str | None) -> str | None:
     """
     if raw is None:
         return None
+    if field in BOOLEAN_FIELDS:
+        return normalize_bool(raw)
     table = _LOOKUPS.get(field)
     if table is None:
         return None

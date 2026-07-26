@@ -61,6 +61,14 @@ class Settings(BaseSettings):
     whatsapp_api_token: str = Field(default="", description="System user access token for outbound messages via Graph API.")
     whatsapp_phone_number_id: str = Field(default="", description="Phone number id from the Meta dashboard, used in the Graph API URL.")
     whatsapp_api_version: str = Field(default="v25.0", description="Meta Graph API version (e.g. v25.0).")
+    whatsapp_app_secret: str = Field(
+        default="",
+        description=(
+            "Meta app secret used to verify the X-Hub-Signature-256 header on "
+            "POST /whatsapp/webhook. If empty, signature verification is "
+            "skipped ONLY in development; any other app_env fails closed."
+        ),
+    )
 
     @field_validator("postgres_db")
     @classmethod
