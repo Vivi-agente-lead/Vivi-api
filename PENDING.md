@@ -110,6 +110,27 @@ An answer outside the synonym table still triggers a re-ask.
   in the README.
 - **6.6** Demo rehearsal against the deployed URL and a live Meta sandbox.
 
-## 10. Housekeeping
+## 10. v2 migration — Blocks B and C
+
+Block A landed (`feat/v2-graph-topology`): the qualification flow is v2-correct and
+the suite is green at 325 passed / 3 skipped. Two blocks remain, both upside
+rather than corrections.
+
+**Block B — entry inversion and the catalogue loop.** v2 opens with a project
+already in hand, then `Para continuar elige una opcion:` branching to
+`Quiero saber más de este proyecto` (qualification), `Quiero ver otro proyecto.`
+(VIS preference → municipio → project menu → back-navigation) and `Salir`. This
+moves `lugar_eleccion_vivir` and `preferencia_vis` to the front and stops
+`get_projects` being READY-only — `specs/agent-tools/spec.md` makes that a MUST
+today and must be amended, not contradicted in code. New surface: the graph has
+no concept of a stateful menu with back-navigation.
+
+**Block C — two capabilities with no code behind them.**
+`¿Te conecto con un asesor de crédito?` (a second hand-off, distinct from the
+asesor comercial one) and `Enviar notificación por correo` (no mail transport
+exists in the project; a logged no-op behind a clean seam is the honest first
+step — do not fake a send).
+
+## 11. Housekeeping
 
 `.atl/` is untracked (agent tooling cache — gitignore it or commit it, but decide).

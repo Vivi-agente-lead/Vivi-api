@@ -74,6 +74,7 @@ available, and it removes the branch the review found most defective.
 | `antiguedad_laboral` | absent from the v2 capacity question; column S keeps its option list but has no question | **Bucket 6 (Estabilidad, 15 pts) loses its only input.** 15% of the score has nothing feeding it |
 | `condicion_discapacidad_familiar` | no column, absent from the capacity question | the `+8` bonus keeps only its `numero_pac > 0` trigger |
 | `cabeza_de_hogar` | no column | derivation and its spec scenario become dead |
+| `tiene_creditos_activos` | absent from the v2 capacity question; both documents silent | **missed in the first pass of this analysis, which listed three removals.** Found during implementation. The column and the scorer's `−5` rule remain, permanently dormant — the rule already fails closed on NULL, so nothing misfires, but the deduction can no longer ever apply |
 | `otra_caja_compensacion` as a caja **name** | column J is now a SI/NO boolean | see §5 |
 | `fecha_nacimiento` (no-afiliado path) | replaced by `¿Que edad tienes?` | see §6 |
 
