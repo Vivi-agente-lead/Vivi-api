@@ -46,7 +46,7 @@ async def verify_webhook(
 
 def _extract_inbound(body: dict) -> tuple[str, str, str, str | None] | None:
     """Pull (wa_id, text, external_id, profile_name) from a Meta webhook body,
-    or None if no inbound text message present (it's a status, not a message)."""
+    or None if no inbound message is present (it's a status, not a message)."""
     if not body or "entry" not in body:
         return None
     for entry in body.get("entry", []):
@@ -57,17 +57,53 @@ def _extract_inbound(body: dict) -> tuple[str, str, str, str | None] | None:
             if not messages:
                 continue
             for msg in messages:
-                if msg.get("type") != "text":
-                    continue  # only text for this iteration
+                text_body = _inbound_text(msg)
+                if text_body is None:
+                    continue
                 wa_id = msg.get("from")
                 external_id = msg.get("id")
-                text_body = (msg.get("text", {}) or {}).get("body", "")
                 profile_name = None
                 for c in contacts:
                     if c.get("wa_id") == wa_id:
                         profile_name = (c.get("profile") or {}).get("name")
                 if wa_id and external_id:
                     return wa_id, text_body, external_id, profile_name
+    return None
+
+
+def _inbound_text(msg: dict) -> str | None:
+    """The pipeline-facing text for one inbound message, or `None` to skip it.
+
+    Two shapes are handled:
+    - `type == "text"` — the free-form `text.body`, as before.
+    - `type == "interactive"` — a quick-reply button or list-row tap. Meta
+      puts the tapped option's `id` under `button_reply` or `list_reply`; that
+      id was set to the field's canonical slug when the message was rendered
+      (`app.services.whatsapp_interactive.render_options`), so handing it to
+      the pipeline exactly where `text.body` goes today reaches the existing
+      deterministic parser with zero extra interpretation — `domain_normalizer
+      .normalize` already accepts a canonical slug as well as the verbatim
+      label (see its `_build_lookup` docstring).
+
+    Previously any `type != "text"` message (including every tactile tap) was
+    silently dropped here — not even acknowledged — which meant no button or
+    list reply worked at all.
+
+    Any other message type (image, audio, a delivery status, …) is not
+    handled this iteration and returns `None`.
+    """
+    msg_type = msg.get("type")
+    if msg_type == "text":
+        return (msg.get("text", {}) or {}).get("body", "")
+    if msg_type == "interactive":
+        interactive = msg.get("interactive") or {}
+        button_reply = interactive.get("button_reply") or {}
+        if button_reply.get("id"):
+            return button_reply["id"]
+        list_reply = interactive.get("list_reply") or {}
+        if list_reply.get("id"):
+            return list_reply["id"]
+        return None
     return None
 
 
