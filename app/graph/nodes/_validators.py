@@ -34,6 +34,7 @@ __all__ = [
     "derive_tiene_pareja",
     "derive_es_empleado",
     "derive_cabeza_de_hogar",
+    "derive_rango_salarial",
     "fold",
     "note_rejected",
     "validate_enumerated",
@@ -146,6 +147,42 @@ def derive_es_empleado(contrato_laboral: str | None) -> bool:
     `"empleado"` is not a member of the source domain and yields `False`.
     """
     return contrato_laboral in CONTRATO_EMPLEADO
+
+
+def derive_rango_salarial(salario: Any) -> str | None:
+    """Bucket an affiliate's `salario_base_cotizacion` into a `rango_salarial` slug.
+
+    `design.md` §4: an affiliate is never asked for `rango_salarial` — "Preguntar
+    solo si es empleado y NO es afiliado Colsubsidio" — and the value "is derived
+    from `salario_base_cotizacion`". The design states the derivation exists but
+    not its boundaries; they are read off the source option labels themselves
+    ("2 millones o menos", "2 a 4 millones", …), each band being inclusive of its
+    upper bound. Without this the scorer's income bucket would contribute 0 for
+    every affiliate, which is the population the 90/10 target is built on.
+
+    Returns `None` when there is no salary on the record — unknown is not
+    average.
+    """
+    if salario is None:
+        return None
+    try:
+        value = Decimal(str(salario))
+    except (InvalidOperation, ValueError):
+        return None
+    if value <= 0:
+        return None
+    for ceiling, slug in _RANGO_SALARIAL_BANDS:
+        if value <= ceiling:
+            return slug
+    return "mas_10m"
+
+
+_RANGO_SALARIAL_BANDS: Final[tuple[tuple[Decimal, str], ...]] = (
+    (Decimal(2_000_000), "hasta_2m"),
+    (Decimal(4_000_000), "2_4m"),
+    (Decimal(8_000_000), "4_8m"),
+    (Decimal(10_000_000), "8_10m"),
+)
 
 
 def derive_cabeza_de_hogar(profile: dict[str, Any]) -> bool:

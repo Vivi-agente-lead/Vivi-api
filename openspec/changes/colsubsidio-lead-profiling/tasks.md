@@ -204,13 +204,13 @@ design's own risk mitigation for API drift and it still applies.
   Every slice that collects an enumerated field prints the source option list verbatim.
   *Files*: `app/prompts/slices.py`, `app/prompts/system.py` · *closes*: DOC-001
 
-- [ ] **4.6 Identity, estado civil, otra caja**
+- [x] **4.6 Identity, estado civil, otra caja**
   `recoger_identidad` (no-afiliado; `edad` computed server-side from
   `fecha_nacimiento`, never trusted from the LLM), `recoger_estado_civil` (6-value
   domain, derives `tiene_pareja`), `recoger_otra_caja` (no-afiliado only).
   *Files*: `app/graph/nodes/`
 
-- [ ] **4.7 Empleo and the four capacity bundles**
+- [x] **4.7 Empleo and the four capacity bundles**
   `recoger_empleo` stores the specific `contrato_laboral` slug and derives
   `es_empleado`. Each bundle collects `subsidio_vivienda_anterior`, `numero_pac`,
   `condicion_discapacidad_familiar`, `tiene_vivienda_propia`, `ahorros_o_cesantias`,
@@ -226,7 +226,7 @@ design's own risk mitigation for API drift and it still applies.
   renders the matching sub-slice.
   *Files*: `app/graph/nodes/`
 
-- [ ] **4.9 Post-LLM validators**
+- [x] **4.9 Post-LLM validators**
   `app/graph/nodes/_validators.py` — strip out-of-schema answers before merging into
   `lead_profile`; route every enumerated value through the normalizer; append rejects
   to `normalization_notes`.

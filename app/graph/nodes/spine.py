@@ -19,6 +19,7 @@ from langchain_core.runnables import RunnableConfig
 
 from app.graph.nodes._common import Field, collect, profile_of, say
 from app.graph.nodes._validators import (
+    derive_rango_salarial,
     parse_bool_si_no,
     parse_numero_documento,
     validate_enumerated,
@@ -133,10 +134,19 @@ async def afiliado_check(state: Any, config: RunnableConfig) -> dict[str, Any]:
         profile["nombre_apellido"] = afiliado.get("nombre_apellido")
         profile["fecha_nacimiento"] = afiliado.get("fecha_nacimiento")
         profile["edad"] = compute_edad(_as_date(afiliado.get("fecha_nacimiento")))
-        if profile.get("estado_civil") is None and afiliado.get("estado_civil"):
-            profile["estado_civil"] = validate_enumerated(
-                "estado_civil", afiliado.get("estado_civil")
-            )
+        # Pre-fill only, never an answer: `recoger_estado_civil` still asks, and
+        # its slice uses this to phrase the question as a confirmation. Writing
+        # it straight into `estado_civil` would let a stale affiliate record
+        # decide `tiene_pareja`, and with it the capacity bundle.
+        conocido = validate_enumerated("estado_civil", afiliado.get("estado_civil"))
+        if conocido is not None:
+            profile["estado_civil_conocido"] = conocido
+        # An affiliate is never asked for `rango_salarial`; it comes off the
+        # record. Without this the scorer's income bucket would be 0 for the
+        # entire affiliate population.
+        rango = derive_rango_salarial(afiliado.get("salario_base_cotizacion"))
+        if rango is not None:
+            profile["rango_salarial"] = rango
 
     await _open_lead_row(profile, config)
     logger.info(
@@ -204,7 +214,7 @@ async def _open_lead_row(profile: dict[str, Any], config: RunnableConfig) -> Non
         "numero_documento": profile.get("numero_documento"),
         "afiliado_colsubsidio": profile.get("afiliado_colsubsidio"),
     }
-    for key in ("nombre_apellido", "categoria", "edad", "score_credito", "estado_civil"):
+    for key in ("nombre_apellido", "categoria", "edad", "score_credito", "rango_salarial"):
         if profile.get(key) is not None:
             payload[key] = profile[key]
     await save_lead.ainvoke(

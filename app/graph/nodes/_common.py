@@ -132,6 +132,7 @@ async def collect(
     fields: Sequence[Field],
     finalize: Callable[[dict[str, Any]], None] | None = None,
     persist_fields: Iterable[str] | None = None,
+    intro: str | None = None,
 ) -> dict[str, Any]:
     """Run one turn of a collection node and return the state delta.
 
@@ -170,11 +171,17 @@ async def collect(
         delta["pending_user_reply"] = ""
 
     if pending is not None:
+        question = pending.question_for(profile)
+        if intro and not any(profile.get(item.name) is not None for item in fields):
+            # The source flow's reassurance message before the capacity block.
+            # It rides on the bundle's first question rather than on a node of
+            # its own, so it costs no extra turn.
+            question = f"{intro}\n\n{question}"
         text = await phrase(
             state,
             node=node,
             profile=profile,
-            question=pending.question_for(profile),
+            question=question,
             options=pending.options(),
         )
         delta["awaiting_field"] = pending.name
