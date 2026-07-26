@@ -232,7 +232,7 @@ design's own risk mitigation for API drift and it still applies.
   to `normalization_notes`.
   *Files*: `app/graph/nodes/_validators.py`
 
-- [ ] **4.10 Crash recovery**
+- [x] **4.10 Crash recovery**
   `app/services/lead_state_rebuilder.py::rebuild_lead_profile(conv_id)`; call it from
   `AgentService.send_message` on the first turn when the checkpointer has no state.
   *Files*: `app/services/lead_state_rebuilder.py`, `app/services/agent_service.py`
@@ -243,7 +243,7 @@ design's own risk mitigation for API drift and it still applies.
   terminating at the afiliado-side gate.
   *Files*: `tests/test_graph_traversal.py`
 
-- [ ] **4.12 Wire the graph and retire the ReAct path**
+- [x] **4.12 Wire the graph and retire the ReAct path**
   `builder.py` compiles the 15-node graph behind `LEAD_PROFILER_ENABLED`; remove
   `create_react_agent` once 4.11 is green.
   *Files*: `app/graph/builder.py`, `app/core/config.py`

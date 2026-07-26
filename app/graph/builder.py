@@ -1,10 +1,12 @@
 """Build and cache the compiled lead-profiling graph.
 
-`build_graph(role)` returns the Colsubsidio `StateGraph` when
-`settings.lead_profiler_enabled` is on, and the legacy prebuilt ReAct agent
-otherwise. The cache and the `build_graph` / `reset_graph_cache` API are
-unchanged from the ReAct iteration, so `AgentService` needs no knowledge of
-which graph it is driving.
+`build_graph(role)` returns the compiled Colsubsidio `StateGraph`. The cache and
+the `build_graph` / `reset_graph_cache` API are unchanged from the ReAct
+iteration, so `AgentService` needs no knowledge of which graph it is driving.
+
+`langgraph.prebuilt.create_react_agent` is no longer used anywhere: a single
+loose tool loop cannot enforce the eligibility gates 100% of the time, which is
+the whole reason this graph exists.
 
 Every outgoing edge goes through `turn_gated` (`app/graph/turn_gate.py`): the
 design rules out interrupts, so a node that has just asked a question routes to
@@ -20,6 +22,7 @@ from typing import TYPE_CHECKING, Any
 from langgraph.graph import END, START, StateGraph
 
 from app.core.config import settings
+from app.core.exceptions import ServiceUnavailableError
 from app.graph.nodes.capacity import (
     cap_emp_con_pareja,
     cap_emp_sin_pareja,
@@ -49,8 +52,6 @@ from app.graph.router import (
 from app.graph.state import AgentState
 from app.graph.turn_gate import turn_gated
 from app.services.checkpointer_factory import build_checkpointer
-from app.services.llm_factory import build_llm
-from app.tools.tool_registry import get_tools_for_role
 
 if TYPE_CHECKING:
     from langgraph.graph.state import CompiledStateGraph
@@ -122,20 +123,22 @@ def build_lead_profiler() -> StateGraph:
 @lru_cache(maxsize=4)
 def _build_graph_cached(role: str) -> "CompiledStateGraph":
     """Construct and cache the compiled graph for a role."""
-    checkpointer = build_checkpointer()
+    if not settings.lead_profiler_enabled:
+        # The prebuilt ReAct agent this flag used to fall back to is gone: one
+        # loose tool loop cannot enforce the Colsubsidio eligibility gates, and
+        # keeping a second, unverified conversational path alive was the larger
+        # risk. Turning the flag off is now a configuration error, stated
+        # loudly rather than silently degrading the demo.
+        raise ServiceUnavailableError(
+            message=(
+                "LEAD_PROFILER_ENABLED is off and there is no alternative graph. "
+                "Set it to true."
+            ),
+            error_code="lead_profiler_disabled",
+        )
 
-    if settings.lead_profiler_enabled:
-        logger.info("graph.build.lead_profiler")
-        return build_lead_profiler().compile(checkpointer=checkpointer)
-
-    from langgraph.prebuilt import create_react_agent
-
-    logger.info("graph.build.react_fallback", extra={"role": role})
-    return create_react_agent(
-        model=build_llm(),
-        tools=get_tools_for_role(role),
-        checkpointer=checkpointer,
-    )
+    logger.info("graph.build.lead_profiler", extra={"role": role})
+    return build_lead_profiler().compile(checkpointer=build_checkpointer())
 
 
 def build_graph(role: str = DEFAULT_ROLE) -> "CompiledStateGraph":

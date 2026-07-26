@@ -83,12 +83,17 @@ class Conversation:
         self.state: dict[str, Any] = {}
         self._asked: list[str] = []
 
-    async def say(self, text: str) -> str:
-        """Send one user message; return the assistant's reply for that turn."""
+    async def say(self, text: str, lead_profile: dict[str, Any] | None = None) -> str:
+        """Send one user message; return the assistant's reply for that turn.
+
+        `lead_profile` seeds the working copy, which is what `AgentService` does
+        after a checkpointer loss.
+        """
         before = len(self.state.get("messages") or [])
-        self.state = await self.graph.ainvoke(
-            {"pending_user_reply": text, "messages": []}, config=self.config
-        )
+        payload: dict[str, Any] = {"pending_user_reply": text, "messages": []}
+        if lead_profile is not None:
+            payload["lead_profile"] = lead_profile
+        self.state = await self.graph.ainvoke(payload, config=self.config)
         self.nodes.append(self.state.get("current_node", ""))
         if self.awaiting:
             self._asked.append(self.awaiting)

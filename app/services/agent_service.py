@@ -5,7 +5,7 @@ Decomposed from the reference god class into collaborators:
 - llm_factory / checkpointer_factory / graph.builder own graph wiring.
 - tool_context owns runtime DI.
 
-Orchestrates only: validate → persist → load history → build graph input →
+Orchestrates only: validate → persist → restore state → build graph input →
 invoke/stream → persist → (SSE mapping on stream). No safety, no HITL, no
 auto-titling. Kept under ~250 lines.
 """
@@ -18,19 +18,20 @@ import logging
 import uuid
 from typing import Any, AsyncGenerator
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.exceptions import ServiceUnavailableError, ValidationError
 from app.graph.builder import DEFAULT_ROLE, build_graph
-from app.prompts.system import render_system_prompt, wrap_user_input
+from app.prompts.system import wrap_user_input
 from app.schemas.chat_schema import (SSEDone, SSEError, SSEMessageEnd, SSEMessageStart,
                                        SSEToken, SSEToolEnd, SSEToolStart)
 from app.schemas.message_schema import MessageCreate
 from app.services.checkpointer_factory import build_thread_id
 from app.services.conversation_service import ConversationService
 from app.services.llm_factory import is_llm_configured
+from app.services.lead_state_rebuilder import rebuild_lead_profile
 from app.services.message_service import MessageService
 from app.services.tool_context import ToolContext
 
@@ -64,16 +65,19 @@ class AgentService:
         conv = await self.conversation_service.get_or_404(conversation_id)
 
         await self.message_service.persist_user_message(conv.id, content)
-        history = await self.message_service.load_history(conv.id)
 
-        graph_input = self._build_graph_input(history, content)
         thread_id = build_thread_id(conv.id)
         tool_context = ToolContext(session=self.session, conversation_id=conv.id)
         config = self._build_run_config(thread_id, tool_context)
+        graph = build_graph(DEFAULT_ROLE)
+
+        checkpointed = await self._checkpointed_state(graph, config)
+        graph_input = await self._build_graph_input(conv.id, content, checkpointed)
+        already_seen = len(checkpointed.get("messages") or [])
 
         try:
             result = await asyncio.wait_for(
-                build_graph(DEFAULT_ROLE).ainvoke(graph_input, config=config),
+                graph.ainvoke(graph_input, config=config),
                 timeout=settings.agent_timeout_seconds,
             )
         except asyncio.TimeoutError:
@@ -81,8 +85,7 @@ class AgentService:
                 message=f"El agente no respondió en {settings.agent_timeout_seconds}s.",
             )
 
-        persisted = await self._persist_turn(conv.id, result, history)
-        return persisted
+        return await self._persist_turn(conv.id, result, already_seen)
 
     # ── Streaming turn (SSE) ──────────────────────────────────────────
 
@@ -115,11 +118,12 @@ class AgentService:
             return
 
         await self.message_service.persist_user_message(conv.id, content)
-        history = await self.message_service.load_history(conv.id)
-        graph_input = self._build_graph_input(history, content)
         thread_id = build_thread_id(conv.id)
         tool_context = ToolContext(session=self.session, conversation_id=conv.id)
         config = self._build_run_config(thread_id, tool_context)
+        graph = build_graph(DEFAULT_ROLE)
+        checkpointed = await self._checkpointed_state(graph, config)
+        graph_input = await self._build_graph_input(conv.id, content, checkpointed)
 
         assistant_id = str(uuid.uuid4())
         yield self._sse("message_start", SSEMessageStart(
@@ -132,7 +136,7 @@ class AgentService:
         tools_emitted: set[str] = set()
 
         try:
-            stream = build_graph(DEFAULT_ROLE).astream_events(graph_input, config=config, version="v2")
+            stream = graph.astream_events(graph_input, config=config, version="v2")
             async for event in stream:
                 kind = event.get("event")
                 name = event.get("name", "")
@@ -167,7 +171,7 @@ class AgentService:
             yield self._sse("error", SSEError(type="error", code="internal_error",
                         message=f"Error del agente: {exc}", recoverable=False))
         finally:
-            full = "".join(chunks) or "(El asistente no produjo respuesta. Probá reformular la pregunta.)"
+            full = "".join(chunks) or "(No pude generar una respuesta en este momento. ¿Puedes intentarlo de nuevo?)"
             entity = await self.message_service.persist_assistant_message(
                 conv.id, full, tokens_prompt=tokens_prompt, tokens_completion=tokens_completion,
             )
@@ -185,14 +189,40 @@ class AgentService:
 
     # ── Helpers ───────────────────────────────────────────────────────
 
-    def _build_graph_input(self, history, new_user_content: str) -> dict:
-        messages: list[Any] = [SystemMessage(content=render_system_prompt())]
-        # history already includes the user message we just persisted; drop the
-        # last entry to avoid duplicating it (we re-add below with delimiters).
-        for h in history[:-1] if history else []:
-            messages.append(self.message_service.to_lc_message(h))
-        messages.append(HumanMessage(content=wrap_user_input(new_user_content)))
-        return {"messages": messages}
+    @staticmethod
+    async def _checkpointed_state(graph, config: dict) -> dict:
+        """The thread's persisted state, or `{}` when the checkpointer lost it."""
+        try:
+            snapshot = await graph.aget_state(config)
+        except Exception:  # noqa: BLE001 — a missing thread is not an error here
+            logger.debug("agent.no_checkpoint")
+            return {}
+        return dict(getattr(snapshot, "values", None) or {})
+
+    async def _build_graph_input(
+        self, conv_id: uuid.UUID, new_user_content: str, checkpointed: dict
+    ) -> dict:
+        """One turn of input: the raw reply plus the wrapped user message.
+
+        The per-node system prompt is rendered inside each node, so no monolithic
+        `SystemMessage` is injected here. Conversation history comes from the
+        checkpointer rather than from the `messages` table — replaying the table
+        every turn would duplicate it into the accumulating `add_messages`
+        channel.
+        """
+        graph_input: dict[str, Any] = {
+            "pending_user_reply": new_user_content,
+            "messages": [HumanMessage(content=wrap_user_input(new_user_content))],
+        }
+        if checkpointed.get("lead_profile"):
+            return graph_input
+
+        # Crash recovery: the checkpointer lost the thread but the `leads` row
+        # survived, so the lead is not asked everything a second time.
+        restored = await rebuild_lead_profile(self.session, conv_id)
+        if restored:
+            graph_input["lead_profile"] = restored
+        return graph_input
 
     @staticmethod
     def _build_run_config(thread_id: str, tool_context: ToolContext) -> dict:
@@ -201,14 +231,21 @@ class AgentService:
             "recursion_limit": settings.agent_max_turns * 3,
         }
 
-    async def _persist_turn(self, conv_id, graph_result, history) -> dict:
-        """Persist a sync turn's assistant + tool messages."""
+    async def _persist_turn(self, conv_id, graph_result, already_seen: int = 0) -> dict:
+        """Persist the assistant + tool messages this turn produced.
+
+        `already_seen` is the message count the checkpointer held before the
+        invocation. The graph's `messages` channel accumulates across the whole
+        conversation, so persisting the full list every turn would rewrite every
+        earlier assistant reply into the `messages` table.
+        """
         from app.schemas.message_schema import MessageResponse
 
         assistant_msg = None
         tool_messages: list = []
         total_tokens = 0
-        for msg in graph_result.get("messages", []):
+        produced = list(graph_result.get("messages", []))[already_seen:]
+        for msg in produced:
             if not isinstance(msg, (AIMessage, ToolMessage)):
                 continue
             entity = self.message_service.lc_message_to_entity(msg, conv_id)
@@ -227,7 +264,7 @@ class AgentService:
         await self.conversation_service.increment_message_counter(conv_id, tokens_added=total_tokens)
         if assistant_msg is None:
             fb = await self.message_service.persist_assistant_message(
-                conv_id, "(El asistente no produjo respuesta. Probá reformular la pregunta.)"
+                conv_id, "(No pude generar una respuesta en este momento. ¿Puedes intentarlo de nuevo?)"
             )
             assistant_msg = MessageResponse.model_validate(fb)
         return {"user_message": None, "assistant_message": assistant_msg, "tool_messages": tool_messages}
