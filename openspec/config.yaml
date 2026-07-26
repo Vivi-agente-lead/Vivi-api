@@ -6,15 +6,28 @@ artifact_store: both
 
 context: |
   Project: vivi-api — conversational agent that profiles real-estate leads for Colsubsidio (Colombia housing subsidy).
-  Stack: Python 3.12, FastAPI 0.140, langchain 1.3.14, langgraph 1.2.9, langchain-openai 1.4.1,
-         SQLAlchemy 2.0.51 async (psycopg 3.3.4), pydantic v2 + pydantic-settings, sse-starlette 3.4.6,
-         langgraph-checkpoint-postgres 3.1.0.
-  Persistence: Postgres local (localhost:5432, db `vivi`, user postgres). No Alembic — Base.metadata.create_all
-               in lifespan (intentional hackathon; migrate to Alembic once lead schema stabilizes).
+  Stack: Python 3.12. Dependency constraints as declared in pyproject.toml (NOT exact pins — see below):
+         fastapi>=0.115, uvicorn[standard]>=0.32, sse-starlette>=2.1, langchain>=0.3, langgraph>=0.5,
+         langgraph-checkpoint-postgres>=2.0, langchain-openai>=0.2, sqlalchemy[asyncio]>=2.0,
+         psycopg[binary]>=3.2, pydantic>=2.9, pydantic-settings>=2.5, python-dotenv>=1.0.
+         Dev: pytest>=8.3, pytest-asyncio>=0.24, httpx>=0.27.
+  KNOWN GAP: these are open lower bounds, and `langgraph>=0.5` spans a major-version boundary.
+         No lockfile exists and no .venv is committed, so the resolved versions are unverified.
+         Exact pins + a committed lockfile are a prerequisite of the colsubsidio-lead-profiling
+         change; record the resolved versions here once the lockfile exists. Do not assert an
+         exact version in any artifact until then.
+  Persistence: Postgres local (localhost:5432, db `vivi`). Schema via scripts/bootstrap_db.py
+               (create_all, no DROP); destructive resets only via scripts/reset_db.py --yes.
+               No Alembic this iteration; migrate once the lead schema stabilizes.
+  Source of truth for domain data: docs/Preguntas y modelo tabla de datos.xlsx (field option lists,
+               gating conditions, 44 proyectos, credit bands) and docs/Flujo asesor…json (node graph).
+               Enumerated field values come from the workbook verbatim, normalized to canonical slugs.
   Channels: WhatsApp Cloud API implemented; HTTP/SSE web channel dropped this iteration (channel-agnostic FastAPI core).
   Tenancy: single-tenant.
-  Run: uvicorn local (`.venv`), F5 in VSCode. No Docker used.
-  Tests: pytest 9.1.1 + pytest-asyncio 1.4.0 (asyncio_mode=auto), httpx for ASGI tests. Only smoke tests so far.
+  Run: uvicorn local (`.venv`), F5 in VSCode. A Dockerfile and docker-compose.yml exist and are used
+       for the Fly.io demo image; local dev does not require them.
+  Tests: pytest + pytest-asyncio (asyncio_mode=auto), httpx for ASGI tests. testpaths=["tests"] —
+         all tests MUST live under tests/ or the configured test command will not run them.
 
 strict_tdd: false   # hackathon (~20h); smoke tests + targeted tests on critical paths suffice
 
@@ -53,6 +66,9 @@ rules:
   design:
     - Keep diagrams minimal; prefer sequence diagrams only for multi-actor flows (WhatsApp → API → LLM → Postgres)
     - Document non-obvious LangGraph node/state decisions with rationale
+    - Never resolve a spec defect in design prose — amend the spec, because verify reads the spec
+    - Enumerated field values MUST be quoted from docs/*.xlsx, never invented; cite the sheet and column
+    - When the workbook and the flow diagram disagree, record the resolution as an explicit decision
   tasks:
     - Group by phase, hierarchical numbering
     - Each task completable in one session (~hackathon increment)
@@ -60,6 +76,9 @@ rules:
     guidelines:
       - Follow existing app/ module patterns
       - Do not introduce Alembic this iteration
+      - Pin exact dependency versions and commit a lockfile before writing graph code
+      - Re-verify the LangGraph API against the installed package; do not trust doc-derived signatures
+      - Place every test under tests/ so `pytest -q` actually runs it
     tdd: false
     test_command: "pytest -q"
   verify:
