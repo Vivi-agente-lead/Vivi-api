@@ -1,0 +1,723 @@
+{
+  "version": "31.0.2",
+  "pages": [
+    {
+      "id": "0F6SK2AZoyua1PAGB7pF",
+      "name": "Página-1",
+      "cells": [
+        {
+          "id": "1",
+          "type": "layer"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-12",
+          "type": "edge",
+          "parent": "1",
+          "source": "OEHg_soMZnePNzv7zPtt-2",
+          "target": "8FZSUpcnYLjmuPJxUpfQ-7"
+        },
+        {
+          "id": "OEHg_soMZnePNzv7zPtt-2",
+          "type": "node",
+          "parent": "1",
+          "label": "Bienvenido(a), soy Vivi 🏠 y seré tu guía para encontrar\ntu hogar ideal. El proyecto en el cual estás interesado(a) es: Bosque de\nTurpial. VIS. Su ubicación es: {Municipio, ubicación}. Área desde: {área_construida}\nHabitaciones desde: 1",
+          "html": "<p class=\"MsoNormal\" style=\"margin-bottom:0in;margin-top:0in;mso-margin-bottom-alt:&lt;br/&gt;8.0pt;mso-margin-top-alt:0in;mso-add-space:auto;line-height:115%\"><font style=\"font-size: 9px;\"><span lang=\"es-419\" style=\"\">Bienvenido(a), soy Vivi </span><span style=\"font-family: &quot;Segoe UI Emoji&quot;, sans-serif;\">🏠</span><span lang=\"es-419\" style=\"\"> y seré tu guía para encontrar<br>tu hogar ideal. El proyecto en el cual estás interesado(a) es: Bosque de<br>Turpial. VIS. Su ubicación es: {Municipio, ubicación}. Área desde: {área_construida}<br>Habitaciones desde: 1</span></font></p>"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-25",
+          "type": "edge",
+          "parent": "1",
+          "source": "qeLVXnz5lRkjzMaxAA86-17",
+          "target": "qeLVXnz5lRkjzMaxAA86-22"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-17",
+          "type": "node",
+          "parent": "1",
+          "label": "¡Genial!\nAquí empieza el camino para adquirir la vivienda de tus sueños! \n\nPara continuar necesito hacerte algunas preguntas para conocerte mejor,\narranquemos!",
+          "html": "<p class=\"MsoNormal\" align=\"center\"><span lang=\"es-419\" style=\"font-size:9.0pt;line-height:115%;color:black;mso-themecolor:text1\">¡Genial!<br/>Aquí empieza el camino para adquirir la vivienda de tus sueños! <br><br/>Para continuar necesito hacerte algunas preguntas para conocerte mejor,<br/>arranquemos!</span></p>"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-28",
+          "type": "edge",
+          "parent": "1",
+          "source": "qeLVXnz5lRkjzMaxAA86-22",
+          "target": "qeLVXnz5lRkjzMaxAA86-27"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-35",
+          "type": "node",
+          "parent": "qeLVXnz5lRkjzMaxAA86-28",
+          "label": "SI"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-31",
+          "type": "edge",
+          "parent": "1",
+          "source": "qeLVXnz5lRkjzMaxAA86-22",
+          "target": "qeLVXnz5lRkjzMaxAA86-30"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-34",
+          "type": "node",
+          "parent": "qeLVXnz5lRkjzMaxAA86-31",
+          "label": "NO"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-22",
+          "type": "node",
+          "parent": "1",
+          "label": "Autorización\nde tratamiento de datos",
+          "html": "<p class=\"MsoNormal\" align=\"center\"><span lang=\"es-419\" style=\"font-size: 8pt; line-height: 115%; color: black;\">Autorización<br>de tratamiento de datos</span></p>"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-27",
+          "type": "node",
+          "parent": "1",
+          "label": "Preguntar tipo de documento",
+          "html": "<p class=\"MsoNormal\" align=\"center\"><span lang=\"es-419\" style=\"font-size: 9pt; line-height: 115%;\">Preguntar tipo de documento</span></p>"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-30",
+          "type": "node",
+          "parent": "1",
+          "label": "FIN"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-63",
+          "type": "edge",
+          "parent": "1",
+          "source": "qeLVXnz5lRkjzMaxAA86-55",
+          "target": "qeLVXnz5lRkjzMaxAA86-57"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-64",
+          "type": "node",
+          "parent": "qeLVXnz5lRkjzMaxAA86-63",
+          "label": "NO"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-144",
+          "type": "edge",
+          "parent": "1",
+          "source": "qeLVXnz5lRkjzMaxAA86-55",
+          "target": "qeLVXnz5lRkjzMaxAA86-112"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-156",
+          "type": "node",
+          "parent": "qeLVXnz5lRkjzMaxAA86-144",
+          "label": "SI"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-55",
+          "type": "node",
+          "parent": "1",
+          "label": "Consultar si es afiliado Colsubsidio"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-155",
+          "type": "edge",
+          "parent": "1",
+          "source": "qeLVXnz5lRkjzMaxAA86-57",
+          "target": "qeLVXnz5lRkjzMaxAA86-116"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-57",
+          "type": "node",
+          "parent": "1",
+          "label": "Preguntar: \nNombre y apellido",
+          "html": "Preguntar: <br>Nombre y apellido"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-213",
+          "type": "edge",
+          "parent": "1",
+          "source": "qeLVXnz5lRkjzMaxAA86-59",
+          "target": "qeLVXnz5lRkjzMaxAA86-211"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-59",
+          "type": "node",
+          "parent": "1",
+          "label": "¿Te gustaría iniciar tu proceso de afiliación a Colsubsidio?&nbsp;"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-60",
+          "type": "node",
+          "parent": "1",
+          "label": "Setear variable pos_subsidio = 0"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-49",
+          "type": "edge",
+          "parent": "1",
+          "source": "qeLVXnz5lRkjzMaxAA86-68",
+          "target": "qeLVXnz5lRkjzMaxAA86-80"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-68",
+          "type": "node",
+          "parent": "1",
+          "label": "¿Cual es tu estado civil {nombre}?"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-50",
+          "type": "edge",
+          "parent": "1",
+          "source": "qeLVXnz5lRkjzMaxAA86-80",
+          "target": "qeLVXnz5lRkjzMaxAA86-160"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-80",
+          "type": "node",
+          "parent": "1",
+          "label": "Preguntar: \n¿Cuentas con contrato de trabajo o eres independiente?",
+          "html": "Preguntar:&nbsp;<br>¿Cuentas con contrato de trabajo o eres independiente?"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-47",
+          "type": "edge",
+          "parent": "1",
+          "source": "qeLVXnz5lRkjzMaxAA86-107",
+          "target": "qeLVXnz5lRkjzMaxAA86-171"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-107",
+          "type": "node",
+          "parent": "1",
+          "label": "Preguntar:\n¿Cuanto suman los ingresos de tu hogar?\n¿En promedio cuanto suman los gastos mensuales de tu hogar?¿Tu o tu pareja cuenta con vivienda propia?¿Cuantas personas tiene a cargo?¿Usted o su pareja han recibido anteriormente un subsidio de vivienda?¿Cuentan con ahorros o cesantias para iniciar?",
+          "html": "Preguntar:<div><ol><li><span style=\"background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));\">¿</span>Cuanto suman los ingresos de tu hogar?<p class=\"MsoNormal\" style=\"margin-bottom:0in;margin-top:0in;mso-margin-bottom-alt:&lt;br/&gt;8.0pt;mso-margin-top-alt:0in;mso-add-space:auto;line-height:115%\"><span lang=\"es-419\"></span></p></li><li>¿En promedio cuanto suman los gastos mensuales de tu hogar?</li><li><span style=\"background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));\">¿Tu o tu pareja cuenta con vivienda propia?</span></li><li><span style=\"background-color: transparent;\">¿Cuantas personas tiene a cargo?</span></li><li><span style=\"background-color: transparent;\">¿Usted o su pareja han recibido anteriormente un subsidio de vivienda?</span></li><li>¿Cuentan con ahorros o cesantias para iniciar?</li></ol></div>"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-218",
+          "type": "edge",
+          "parent": "1",
+          "source": "qeLVXnz5lRkjzMaxAA86-112",
+          "target": "qeLVXnz5lRkjzMaxAA86-133"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-112",
+          "type": "node",
+          "parent": "1",
+          "label": "Consultar categoria del afiliado y setear"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-152",
+          "type": "edge",
+          "parent": "1",
+          "source": "qeLVXnz5lRkjzMaxAA86-116"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-116",
+          "type": "node",
+          "parent": "1",
+          "label": "¿Que edad tienes?"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-126",
+          "type": "edge",
+          "parent": "1",
+          "target": "qeLVXnz5lRkjzMaxAA86-125"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-128",
+          "type": "node",
+          "parent": "qeLVXnz5lRkjzMaxAA86-126",
+          "label": "NO"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-210",
+          "type": "edge",
+          "parent": "1",
+          "source": "qeLVXnz5lRkjzMaxAA86-120",
+          "target": "qeLVXnz5lRkjzMaxAA86-59"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-120",
+          "type": "node",
+          "parent": "1",
+          "label": "¿Es mayor de edad?"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-122",
+          "type": "node",
+          "parent": "1",
+          "label": "FIN"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-127",
+          "type": "edge",
+          "parent": "1",
+          "source": "qeLVXnz5lRkjzMaxAA86-125",
+          "target": "qeLVXnz5lRkjzMaxAA86-122"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-125",
+          "type": "node",
+          "parent": "1",
+          "label": "Mensaje cordial de despedida"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-139",
+          "type": "edge",
+          "parent": "1",
+          "source": "qeLVXnz5lRkjzMaxAA86-133"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-133",
+          "type": "node",
+          "parent": "1",
+          "label": "Consultar edad en BD"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-147",
+          "type": "edge",
+          "parent": "1",
+          "source": "qeLVXnz5lRkjzMaxAA86-135",
+          "target": "qeLVXnz5lRkjzMaxAA86-138"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-149",
+          "type": "node",
+          "parent": "qeLVXnz5lRkjzMaxAA86-147",
+          "label": "NO"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-216",
+          "type": "edge",
+          "parent": "1",
+          "source": "qeLVXnz5lRkjzMaxAA86-135",
+          "target": "qeLVXnz5lRkjzMaxAA86-215"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-135",
+          "type": "node",
+          "parent": "1",
+          "label": "¿Es mayor de edad?"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-136",
+          "type": "node",
+          "parent": "1",
+          "label": "FIN"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-197",
+          "type": "edge",
+          "parent": "1",
+          "source": "qeLVXnz5lRkjzMaxAA86-138",
+          "target": "qeLVXnz5lRkjzMaxAA86-136"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-138",
+          "type": "node",
+          "parent": "1",
+          "label": "Mensaje cordial de despedida"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-51",
+          "type": "edge",
+          "parent": "1",
+          "source": "qeLVXnz5lRkjzMaxAA86-160",
+          "target": "qeLVXnz5lRkjzMaxAA86-107"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-160",
+          "type": "node",
+          "parent": "1",
+          "label": "Mensaje:\nYa voy conociendote mejor, vamos con unas preguntas mas",
+          "html": "Mensaje:<br>Ya voy conociendote mejor, vamos con unas preguntas mas"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-187",
+          "type": "edge",
+          "parent": "1",
+          "source": "qeLVXnz5lRkjzMaxAA86-171",
+          "target": "qeLVXnz5lRkjzMaxAA86-181"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-171",
+          "type": "node",
+          "parent": "1",
+          "label": "Mensaje:\nSuper! Ya tengo tu perdil de compra ahora cuentame un poco de la vivienda que deseas",
+          "html": "Mensaje:<div>Super! Ya tengo tu perdil de compra ahora cuentame un poco de la vivienda que deseas</div>"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-52",
+          "type": "edge",
+          "parent": "1",
+          "source": "qeLVXnz5lRkjzMaxAA86-181",
+          "target": "qeLVXnz5lRkjzMaxAA86-182"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-181",
+          "type": "node",
+          "parent": "1",
+          "label": "Cuentanos un poco sobre la vivienda de tus sueños"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-65",
+          "type": "edge",
+          "parent": "1",
+          "source": "qeLVXnz5lRkjzMaxAA86-182",
+          "target": "8FZSUpcnYLjmuPJxUpfQ-60"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-182",
+          "type": "node",
+          "parent": "1",
+          "label": "¿En cuánto tiempo deseas comprar la vivienda de tus sueños?"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-48",
+          "type": "edge",
+          "parent": "1",
+          "source": "qeLVXnz5lRkjzMaxAA86-211",
+          "target": "qeLVXnz5lRkjzMaxAA86-68"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-211",
+          "type": "node",
+          "parent": "1",
+          "label": "La respuesta es \"Si estoy interesado en afiliarme\" o \"No,\nprefiero en otro momento.\"",
+          "html": "La respuesta es \"<span style=\"background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));\">Si estoy interesado en afiliarme\" o&nbsp;</span><span style=\"background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));\">\"No,<br>prefiero en otro momento.</span><span style=\"background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));\">\"</span><p class=\"MsoNormal\" style=\"margin-bottom:0in;margin-top:0in;mso-margin-bottom-alt:&lt;br/&gt;8.0pt;mso-margin-top-alt:0in;mso-add-space:auto;line-height:115%\"><span lang=\"es-419\"></span></p>"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-212",
+          "type": "edge",
+          "parent": "1",
+          "source": "qeLVXnz5lRkjzMaxAA86-211",
+          "target": "qeLVXnz5lRkjzMaxAA86-60"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-214",
+          "type": "node",
+          "parent": "qeLVXnz5lRkjzMaxAA86-212",
+          "label": "SI"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-220",
+          "type": "edge",
+          "parent": "1",
+          "source": "qeLVXnz5lRkjzMaxAA86-215",
+          "target": "qeLVXnz5lRkjzMaxAA86-219"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-215",
+          "type": "node",
+          "parent": "1",
+          "label": "Consultar estado civil"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-221",
+          "type": "edge",
+          "parent": "1",
+          "source": "qeLVXnz5lRkjzMaxAA86-219"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-219",
+          "type": "node",
+          "parent": "1",
+          "label": "Consultar si es empleado o independiente"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-230",
+          "type": "edge",
+          "parent": "1",
+          "source": "qeLVXnz5lRkjzMaxAA86-226",
+          "target": "qeLVXnz5lRkjzMaxAA86-107"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-226",
+          "type": "node",
+          "parent": "1",
+          "label": "Mensaje:\n{nombre} para continuarcon la busqueda de tu hogar ideal procedere con unas preguntas personales",
+          "html": "Mensaje:<div>{nombre} para continuarcon la busqueda de tu hogar ideal procedere con unas preguntas personales&nbsp;</div>"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-229",
+          "type": "edge",
+          "parent": "1",
+          "source": "qeLVXnz5lRkjzMaxAA86-227"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-227",
+          "type": "node",
+          "parent": "1",
+          "label": "Digita tu numero de comumento sin espacios ni caracteres especiales",
+          "html": "<p class=\"MsoNormal\" align=\"center\"><span lang=\"es-419\" style=\"font-size: 9pt; line-height: 115%;\">Digita tu numero de comumento sin espacios ni caracteres especiales</span></p>"
+        },
+        {
+          "id": "qeLVXnz5lRkjzMaxAA86-228",
+          "type": "edge",
+          "parent": "1",
+          "source": "qeLVXnz5lRkjzMaxAA86-27",
+          "target": "qeLVXnz5lRkjzMaxAA86-227"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-7",
+          "type": "node",
+          "parent": "1",
+          "label": "Para continuar elige una opcion:"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-13",
+          "type": "edge",
+          "parent": "1",
+          "source": "8FZSUpcnYLjmuPJxUpfQ-8",
+          "target": "qeLVXnz5lRkjzMaxAA86-17"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-29",
+          "type": "edge",
+          "parent": "1",
+          "source": "8FZSUpcnYLjmuPJxUpfQ-8",
+          "target": "8FZSUpcnYLjmuPJxUpfQ-9"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-30",
+          "type": "edge",
+          "parent": "1",
+          "source": "8FZSUpcnYLjmuPJxUpfQ-8",
+          "target": "8FZSUpcnYLjmuPJxUpfQ-10"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-8",
+          "type": "node",
+          "parent": "1",
+          "label": "Quiero saber más de este proyecto"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-35",
+          "type": "edge",
+          "parent": "1",
+          "source": "8FZSUpcnYLjmuPJxUpfQ-9",
+          "target": "8FZSUpcnYLjmuPJxUpfQ-32"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-9",
+          "type": "node",
+          "parent": "1",
+          "label": "Quiero ver otro proyecto."
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-10",
+          "type": "node",
+          "parent": "1",
+          "label": "Salir"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-11",
+          "type": "edge",
+          "parent": "1",
+          "source": "8FZSUpcnYLjmuPJxUpfQ-7",
+          "target": "8FZSUpcnYLjmuPJxUpfQ-8"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-14",
+          "type": "node",
+          "parent": "1",
+          "label": "Hablaste con Vivi, tu guía para encontrar tu hogar ideal. Que pases un buen día."
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-15",
+          "type": "edge",
+          "parent": "1",
+          "source": "8FZSUpcnYLjmuPJxUpfQ-10",
+          "target": "8FZSUpcnYLjmuPJxUpfQ-14"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-39",
+          "type": "edge",
+          "parent": "1",
+          "source": "8FZSUpcnYLjmuPJxUpfQ-16",
+          "target": "8FZSUpcnYLjmuPJxUpfQ-20"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-16",
+          "type": "node",
+          "parent": "1",
+          "label": "Tenemos\nproyectos disponibles en los siguientes municipios, ¿Dónde te gustaría vivir?",
+          "html": "<p class=\"MsoNormal\" align=\"center\"><span lang=\"es-419\" style=\"font-size: 9pt; line-height: 115%;\">Tenemos<br/>proyectos disponibles en los siguientes municipios, ¿Dónde te gustaría vivir?</span></p>"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-42",
+          "type": "edge",
+          "parent": "1",
+          "source": "8FZSUpcnYLjmuPJxUpfQ-20",
+          "target": "8FZSUpcnYLjmuPJxUpfQ-25"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-20",
+          "type": "node",
+          "parent": "1",
+          "label": "Mostrar menu de proyectos disponibles en la zona seleccionada y segun tipo de vivienda seleccionado",
+          "html": "<p class=\"MsoNormal\" align=\"center\">Mostrar menu de proyectos disponibles en la zona seleccionada y segun tipo de vivienda seleccionado</p>"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-43",
+          "type": "edge",
+          "parent": "1",
+          "source": "8FZSUpcnYLjmuPJxUpfQ-25",
+          "target": "8FZSUpcnYLjmuPJxUpfQ-16"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-45",
+          "type": "node",
+          "parent": "8FZSUpcnYLjmuPJxUpfQ-43",
+          "label": "SI"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-25",
+          "type": "node",
+          "parent": "1",
+          "label": "El usuario selecciona volver al menu anterior"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-38",
+          "type": "edge",
+          "parent": "1",
+          "source": "8FZSUpcnYLjmuPJxUpfQ-32",
+          "target": "8FZSUpcnYLjmuPJxUpfQ-16"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-32",
+          "type": "node",
+          "parent": "1",
+          "label": "Preguntar: ¿Te interesan vivienda VIS, NO VIS o ambas?",
+          "html": "<p class=\"MsoNormal\" align=\"center\">Preguntar:&nbsp;<span style=\"background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));\">¿Te interesan vivienda VIS, NO VIS o ambas?</span></p>"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-41",
+          "type": "edge",
+          "parent": "1",
+          "source": "8FZSUpcnYLjmuPJxUpfQ-25",
+          "target": "qeLVXnz5lRkjzMaxAA86-17"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-44",
+          "type": "node",
+          "parent": "8FZSUpcnYLjmuPJxUpfQ-41",
+          "label": "SI"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-46",
+          "type": "node",
+          "parent": "8FZSUpcnYLjmuPJxUpfQ-41",
+          "label": "NO"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-54",
+          "type": "node",
+          "parent": "1",
+          "label": "¿Te conecto con un asesor de crédito?"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-66",
+          "type": "edge",
+          "parent": "1",
+          "source": "8FZSUpcnYLjmuPJxUpfQ-60",
+          "target": "8FZSUpcnYLjmuPJxUpfQ-62"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-67",
+          "type": "edge",
+          "parent": "1",
+          "source": "8FZSUpcnYLjmuPJxUpfQ-60",
+          "target": "8FZSUpcnYLjmuPJxUpfQ-64"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-80",
+          "type": "edge",
+          "parent": "1",
+          "source": "8FZSUpcnYLjmuPJxUpfQ-60",
+          "target": "8FZSUpcnYLjmuPJxUpfQ-63"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-60",
+          "type": "node",
+          "parent": "1",
+          "label": "Calificar lead"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-70",
+          "type": "edge",
+          "parent": "1",
+          "source": "8FZSUpcnYLjmuPJxUpfQ-61",
+          "target": "8FZSUpcnYLjmuPJxUpfQ-54"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-61",
+          "type": "node",
+          "parent": "1",
+          "label": "Me ha encantado tu entusiasmo en la búsqueda de tu hogar ideal. Te veo muy seguro(a) y quiero brindarte recomendaciones precisas sobre tu futuro proyecto de vida.&nbsp;"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-69",
+          "type": "edge",
+          "parent": "1",
+          "source": "8FZSUpcnYLjmuPJxUpfQ-62",
+          "target": "8FZSUpcnYLjmuPJxUpfQ-61"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-62",
+          "type": "node",
+          "parent": "1",
+          "label": "Calificado"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-63",
+          "type": "node",
+          "parent": "1",
+          "label": "Nutrible"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-64",
+          "type": "node",
+          "parent": "1",
+          "label": "No calificado"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-72",
+          "type": "node",
+          "parent": "1",
+          "label": "Enviar notificación por correo"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-73",
+          "type": "node",
+          "parent": "1",
+          "label": "FIN"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-75",
+          "type": "edge",
+          "parent": "1",
+          "source": "8FZSUpcnYLjmuPJxUpfQ-54",
+          "target": "8FZSUpcnYLjmuPJxUpfQ-72"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-79",
+          "type": "edge",
+          "parent": "1",
+          "source": "8FZSUpcnYLjmuPJxUpfQ-76",
+          "target": "8FZSUpcnYLjmuPJxUpfQ-73"
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-76",
+          "type": "node",
+          "parent": "1",
+          "label": "Perfecto, un asesor se estara comunicando contigo proximamente! Que pases un buen día."
+        },
+        {
+          "id": "8FZSUpcnYLjmuPJxUpfQ-77",
+          "type": "edge",
+          "parent": "1",
+          "source": "8FZSUpcnYLjmuPJxUpfQ-72",
+          "target": "8FZSUpcnYLjmuPJxUpfQ-76"
+        }
+      ]
+    }
+  ]
+}
