@@ -45,8 +45,21 @@ curl -X POST "http://localhost:8000/whatsapp/simulate" --get \
 ```
 
 Repite con cada respuesta reusando el mismo `from` para continuar el mismo hilo.
-Con `dry_run=true` la respuesta del agente vuelve en el cuerpo y no se envía nada
-a Meta.
+
+> **La respuesta del agente no vuelve en el cuerpo.** El endpoint responde
+> `{"status":"queued"}` de inmediato y procesa en segundo plano, igual que el
+> webhook real de Meta. Con `dry_run=true` no se envía nada a Meta y la
+> respuesta queda en el log:
+>
+> ```bash
+> # local
+> uvicorn app.main:app --reload      # el log muestra inbound.dry_run.reply
+> # desplegado
+> railway logs
+> ```
+>
+> Para ver la conversación completa después, está en la base:
+> `SELECT role, content FROM messages ORDER BY created_at;`
 
 > El simulador es solo texto: los botones y listas se envían únicamente por
 > WhatsApp real. El menú se responde escribiendo la opción.
