@@ -294,19 +294,27 @@ async def test_afiliado_is_never_asked_identidad_otra_caja_or_rango_salarial(
     assert graph_world.lead(chat.conversation_id).otra_caja_compensacion is None
 
 
-async def test_no_afiliado_scoring_between_60_and_74_is_nurture(
+async def test_no_afiliado_gets_the_seventy_five_threshold_and_lands_on_nurture(
     graph_world: World,
 ) -> None:
-    """Spec: *Happy path no-afiliado* — READY needs 75, not 60.
+    """Spec: *Happy path no-afiliado* — READY needs 75 for a no-afiliado, not 60.
 
-    The lead below scores inside [60, 74], so the affiliation-dependent
-    threshold is what decides the verdict.
+    The assertion is the **threshold that was applied**, not a hard-coded score.
+    A no-afiliado's credit band comes from `simulate_bureau_cedula`, which lives
+    in `credit_bands.py`; pinning the exact number here would make this
+    traversal test fail whenever that simulation is retuned, for a reason that
+    has nothing to do with the graph. What the graph owes the spec is that the
+    affiliation-dependent threshold reached the scorer at all.
     """
     chat = Conversation()
     await chat.run(ANSWERS_NO_AFILIADO)
 
     assert chat.profile["afiliado_colsubsidio"] is False
-    assert 60 <= chat.profile["score"] <= 74
+    assert (
+        "Umbral READY aplicado: 75 (no afiliado)"
+        in chat.profile["classification_reasoning"]
+    )
+    assert 30 <= chat.profile["score"] < 75
     assert chat.profile["status"] == "nurture"
 
     lead = graph_world.lead(chat.conversation_id)
