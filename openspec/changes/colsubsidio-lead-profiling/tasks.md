@@ -197,7 +197,7 @@ design's own risk mitigation for API drift and it still applies.
   creates the `leads` row at `status='profiling'`.
   *Files*: `app/graph/nodes/`, `app/graph/builder.py`
 
-- [ ] **4.5 Prompt slices**
+- [x] **4.5 Prompt slices**
   `app/prompts/slices.py` + `render_system_prompt(node, …)`. Neutral professional
   Colombian Spanish with `tú` — **no voseo, no German or Portuguese fragments** (the
   previous design revision carried `Gespräch`, `atualizá`, `pregunts`, `laconfirmation`).
