@@ -286,41 +286,78 @@ design's own risk mitigation for API drift and it still applies.
 
 ## Phase 6 — Delivery
 
-- [ ] **6.1 Dockerfile**
+- [x] **6.1 Dockerfile**
   Copy `scripts/` (and any source data the seed reads) into the image; install from
   the lockfile. The current image copies only `pyproject.toml`, `README.md` and
   `app/`, so the seed cannot run on Fly.
-  *Files*: `Dockerfile` · *closes*: RES-004
+  Done: `Dockerfile` now installs from `requirements.lock` first (better layer
+  caching) and copies `scripts/` alongside `app/`. `requirements.lock`'s trailing
+  `-e git+ssh://...#egg=vivi_api` self-reference is stripped (a Docker build has
+  no SSH key to satisfy it); `openpyxl==3.1.5` — locked but previously undeclared
+  in `pyproject.toml` — is now a direct dependency there. Verified with a real
+  `docker build` (image builds, `app.main`, `scripts.seed_colsubsidio`,
+  `scripts.bootstrap_db` and `openpyxl` all import inside the built image).
+  *Files*: `Dockerfile`, `pyproject.toml`, `requirements.lock` · *closes*: RES-004
 
 - [ ] **6.2 Fly.io deploy**
   `fly.toml` for a US region; set `OPENAI_API_KEY`, `OPENAI_BASE_URL`, Postgres DSN,
   `WHATSAPP_APP_SECRET`, and `APP_ENV=production` (which also closes `/simulate`).
   Run bootstrap + seed once against the deployed database.
+  **Not run** — out of scope for this session (needs a Fly.io account this agent
+  does not have). `fly.toml` is authored and documents the exact commands
+  (README.md "Deploy to Fly.io"); nobody has executed them. Note also that
+  `APP_ENV=production` does **not** currently close `/simulate` as this task
+  assumes — Phase 5 (task 5.3) has not landed on this branch, so the route is
+  not gated on `app_env` yet. See `fly.toml`'s header comment.
   *Files*: `fly.toml`
 
 - [ ] **6.3 Reconcile Postgres credentials**
   `.env.example` (`postgres`/`123456789`), `app/core/config.py` defaults
   (`vivi`/`vivi`) and `docker-compose.yml` (`vivi`/`vivi`) disagree three ways.
+  **Not touched this session** — owned by a concurrent change; `.env.example`,
+  `app/core/config.py` and `docker-compose.yml` were left untouched by request.
+  README.md's "Running locally" flags the mismatch so a reader is not misled.
   *Files*: `.env.example`, `app/core/config.py`, `docker-compose.yml` · *closes*: DOC-003
 
-- [ ] **6.4 README rewrite**
+- [x] **6.4 README rewrite**
   Remove the SSE endpoint claim and the "WhatsApp stubbed at `app/routers/webhook.py`"
   claim — both are false, in opposite directions. Add the juror walkthrough: Fly URL,
   the 3 demo-star cedulas with expected outcomes, simulator commands, webhook verify
   token placeholder, the affiliate-share query, and the Meta sandbox caveat. Under 5
   minutes end to end.
+  Done: rewritten against `app/main.py`'s actually-mounted routers. Includes the
+  Fly URL placeholder, the 3 demo-star cedulas (from `scripts/seed_colsubsidio.py`
+  / `app/services/credit_bands.py::DEMO_CEDULA_SCORES`) with full copy-pasteable
+  conversation scripts and hand-computed expected scores/status, the
+  `/whatsapp/simulate` commands, the webhook verify-token placeholder, the 90/10
+  affiliate-share SQL query, and the Meta sandbox caveat. Also documents the
+  Phase-5 gaps (webhook signature, `/simulate` gate, `/health` readiness, wamid
+  idempotency) honestly under "Known limitations" rather than claiming them
+  fixed.
   *Files*: `README.md` · *closes*: DOC-002
 
-- [ ] **6.5 ARCHITECTURE.md**
+- [x] **6.5 ARCHITECTURE.md**
   Channel-agnostic seam (`AgentService.send_message` + `ToolContext`), the 15-node
   topology, and the normalizer boundary. Mirror the §13 recorded decisions here so
   they survive without Engram.
+  Done: new `ARCHITECTURE.md` covers the channel-agnostic seam, the 15-node
+  topology (with the `turn_gated`/`awaiting_field` turn-boundary mechanism the
+  code added beyond `design.md`'s sketch), the normalizer boundary (verbatim
+  labels vs. canonical slugs, and the municipio join-key split), the scorer's six
+  buckets and red flags, the 90/10 structural levers, and the dual-persistence
+  mirror contract. Closes with a "Known architectural gaps" section naming the
+  unmounted Phase-5 items and the unmounted SSE channel.
   *Files*: `ARCHITECTURE.md` · *closes*: SDD-008, SDD-010
 
 - [ ] **6.6 Demo rehearsal**
   Drive all three demo-star cedulas plus one no-afiliado and one prior-subsidy lead
   against the Fly URL. Confirm the READY lead sees projects, the affiliate share query
   returns a sane figure, and `/simulate` 404s in production.
+  **Not run** — out of scope for this session (needs the Fly deploy from 6.2 and
+  a live Meta sandbox; both need the user's own accounts). The three demo-star
+  scripts in README.md are the rehearsal script to run once 6.2 lands; their
+  expected scores are hand-computed against `app/services/lead_scorer.py`, not
+  yet confirmed against a live run.
   *Verifies*: proposal §Success Criteria
 
 ---
