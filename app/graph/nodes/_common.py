@@ -263,13 +263,17 @@ async def phrase(
     instruction = (
         "Escribe el siguiente turno de la conversación en español colombiano "
         "neutro y cercano, tuteando.\n"
-        "- Si la persona acaba de darte un dato, reconócelo en pocas palabras "
-        "antes de seguir (por ejemplo: «Listo, quedaste como casado.»).\n"
+        "- Ve directo a la pregunta. NO repitas ni confirmes lo que la persona "
+        "acaba de responder: ya lo ve en pantalla y repetirlo satura la "
+        "conversación.\n"
+        "- No empieces con muletillas de confirmación («Listo», «Perfecto», "
+        "«Genial», «Entendido»). Si de verdad aporta algo, conecta con el hilo "
+        "de la conversación, y usa palabras distintas a las del turno anterior.\n"
         "- Formula UNA sola pregunta, la que va abajo. Puedes cambiar las "
         "palabras; no cambies lo que se pregunta.\n"
         "- No enumeres las opciones: se agregan automáticamente después de tu "
         "mensaje.\n"
-        "- Máximo dos frases. Sin emojis, sin saludos repetidos.\n\n"
+        "- Una o dos frases, cortas. Sin emojis, sin saludos.\n\n"
         f"--- PREGUNTA ---\n{stem}\n--- FIN PREGUNTA ---"
     )
     history = _recent_messages(state)

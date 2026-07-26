@@ -54,9 +54,24 @@ def test_long_label_is_truncated_in_the_row_title_but_kept_in_description() -> N
     long_label = "Permiso especial de permanencia"  # 31 chars > 24-char row title cap
     shape = render_options("tipo_documento", ["Cédula de ciudadanía", long_label])
     assert isinstance(shape, InteractiveList)
-    row = next(r for r in shape.sections[0]["rows"] if r["description"] == long_label)
+    row = next(r for r in shape.sections[0]["rows"] if r.get("description"))
+    assert row["description"] == long_label
     assert len(row["title"]) <= 24
     assert row["title"] != long_label
+
+
+def test_a_row_that_fits_carries_no_description() -> None:
+    """WhatsApp draws the description under the title.
+
+    Repeating the label there made every option appear twice in the menu, which
+    is what a real tester reported. The description now earns its place only by
+    showing something the truncated title cannot.
+    """
+    shape = render_options("estado_civil", ["Soltero", "Casado", "Union libre", "Viudo"])
+    assert isinstance(shape, InteractiveList)
+    for row in shape.sections[0]["rows"]:
+        assert row["title"] == row["title"]  # fits, so it was never truncated
+        assert "description" not in row
 
 
 def test_more_than_100_options_do_not_fit_anything() -> None:

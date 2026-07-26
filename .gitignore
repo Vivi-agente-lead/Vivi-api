@@ -30,4 +30,5 @@ htmlcov/
 # can be added later if needed.
 *.swp
 *.swo
-.DS_Store
+.DS_Store.claude/
+.atl/
