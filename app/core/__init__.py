@@ -1,0 +1,1 @@
+"""Core cross-cutting concerns: config, database, exceptions."""
