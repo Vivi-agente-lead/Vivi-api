@@ -258,6 +258,38 @@ edges are static `.add_edge(src, dst)`.
 is true, per the source condition "Preguntar solo si es empleado y NO es afiliado
 Colsubsidio". For an afiliado it is derived from `salario_base_cotizacion`.
 
+### 4.2 `rango_salarial` derivation for affiliates
+
+An earlier revision said only that the value "is derived from `salario_base_cotizacion`"
+without giving boundaries. That is not implementable: with no derivation, Bucket 3
+contributes `0` for **every affiliate** — the population the 90/10 target rests on.
+
+The boundaries are read off the source option labels themselves, each band inclusive of
+its upper bound:
+
+```python
+# app/graph/nodes/_validators.py::derive_rango_salarial
+#   ≤  2_000_000  -> hasta_2m   ("2 millones o menos")
+#   ≤  4_000_000  -> 2_4m       ("2 a 4 millones")
+#   ≤  8_000_000  -> 4_8m       ("4 a 8 millones")
+#   ≤ 10_000_000  -> 8_10m      ("8 a 10 millones")
+#   >  10_000_000 -> mas_10m    ("mas de 10 millones")
+#   None          -> None       (unknown is not average — Bucket 3 contributes 0)
+```
+
+Derived at the end of `afiliado_check`, alongside `edad` and `score_rating`.
+
+### 4.3 `estado_civil` pre-fill is context, not an answer
+
+§4 lists `recoger_estado_civil` as reading `afiliado_record.estado_civil` and writing
+`estado_civil`. Writing the record value straight through would mean the node never
+asks, and a stale affiliate record would silently decide `tiene_pareja` — and with it
+the capacity bundle and `cabeza_de_hogar`.
+
+The record value is therefore stored as `estado_civil_conocido` and injected into the
+node's prompt slice as context only. The node still asks and still writes `estado_civil`
+from the confirmed reply.
+
 ### 4.1 `cabeza_de_hogar` derivation
 
 ```python

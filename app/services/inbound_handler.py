@@ -81,7 +81,7 @@ class InboundMessageHandler:
         assistant_msg = result.get("assistant_message")
         reply = assistant_msg.content if assistant_msg else None
         if not reply:
-            reply = "Disculpá, no entendí. ¿Podés reformular?"
+            reply = "Disculpa, no entendí. ¿Me lo puedes repetir?"
 
         if not dry_run:
             await get_whatsapp_client().send_text(wa_id, reply)

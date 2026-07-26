@@ -10,10 +10,11 @@ The system MUST expose exactly five tools to the agent runtime: `lookup_afiliado
 
 - GIVEN an `afiliados_colsubsidio` table seeded with a row (tipo='CC', numero='12345678', categoria_afiliado='A', score_credito=820)
 - WHEN `lookup_afiliado(tipo_documento='CC', numero_documento='12345678')` is called
-- THEN the tool returns a dict containing `categoria_afiliado`, `edad` (derived from `fecha_nacimiento`), `score_credito`, `score_rating` (band label of `score_credito`), and `ha_recibido_subsidio`
+- THEN the tool returns `{afiliado: {…}}`, and that nested `afiliado` object contains `categoria_afiliado`, `edad` (derived from `fecha_nacimiento`), `score_credito`, `score_rating` (band label of `score_credito`), and `ha_recibido_subsidio`
 - GIVEN an unknown cedula
 - WHEN `lookup_afiliado` is called with that cedula
 - THEN the tool returns `{afiliado: null}` (no exception)
+- AND both branches share the same envelope: the payload is always under the `afiliado` key, never flattened to the top level
 
 #### Scenario: lookup_afiliado accepts every source document type
 

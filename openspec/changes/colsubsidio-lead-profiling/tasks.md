@@ -149,7 +149,7 @@ the change's stated risk mitigation did not exist.
 
 ## Phase 3 — Tools
 
-- [ ] **3.1 Replace the tool module**
+- [x] **3.1 Replace the tool module**
   Five tools per `design.md` §5: `lookup_afiliado`, `save_lead`, `get_lead`,
   `get_projects`, `classify_lead`. Delete the `search_leads` and `score_lead` stubs.
   `save_lead` normalizes every enumerated field before writing and records rejects in
@@ -157,11 +157,11 @@ the change's stated risk mitigation did not exist.
   `'VIS'` repair. No `langgraph` import.
   *Files*: `app/tools/lead_tools.py` · *spec*: `agent-tools`
 
-- [ ] **3.2 Tool registry**
+- [x] **3.2 Tool registry**
   Wire the five tools to role `"agent"`.
   *Files*: `app/tools/tool_registry.py`
 
-- [ ] **3.3 Tool tests**
+- [x] **3.3 Tool tests**
   `tests/test_lead_tools.py` — `save_lead` upsert preserves prior fields and never
   promotes `status`; `get_lead` returns `null` with no row; `lookup_afiliado` accepts
   all five document slugs and rejects `TI`; `get_projects` returns rows for `'Bogota'`;
@@ -175,42 +175,42 @@ the change's stated risk mitigation did not exist.
 Land 4.4 (the smallest end-to-end machine) before adding branches — that was the
 design's own risk mitigation for API drift and it still applies.
 
-- [ ] **4.1 Agent state**
+- [x] **4.1 Agent state**
   `lead_profile`, `current_node`, `pending_user_reply`. Retire `lead_profile_draft`.
   *Files*: `app/graph/state.py`
 
-- [ ] **4.2 Routers**
+- [x] **4.2 Routers**
   `app/graph/router.py` — the five predicates from `design.md` §3. All terminal
   returns use the **`END` sentinel imported from `langgraph.graph`**, never the string
   `"END"`. `edad is None` routes to `END` in both age gates.
   *Files*: `app/graph/router.py` · *closes*: LOGIC-002, LOGIC-003
 
-- [ ] **4.3 Router tests**
+- [x] **4.3 Router tests**
   `tests/test_router.py` — table-driven over every branch, including
   `divorciado`/`separado`/`viudo` reaching the `sin_pareja` bundles, and both underage
   gates returning `END`.
   *Files*: `tests/test_router.py` · *closes*: DATA-010
 
-- [ ] **4.4 Spine: `start` → `autorizacion_datos` → `pedir_cedula` → `afiliado_check` → `handoff`**
+- [x] **4.4 Spine: `start` → `autorizacion_datos` → `pedir_cedula` → `afiliado_check` → `handoff`**
   Four nodes plus a stub handoff, compiled and traversable end to end. `afiliado_check`
   is tool-dispatch only (no LLM): calls `lookup_afiliado`, derives `edad` server-side,
   creates the `leads` row at `status='profiling'`.
   *Files*: `app/graph/nodes/`, `app/graph/builder.py`
 
-- [ ] **4.5 Prompt slices**
+- [x] **4.5 Prompt slices**
   `app/prompts/slices.py` + `render_system_prompt(node, …)`. Neutral professional
   Colombian Spanish with `tú` — **no voseo, no German or Portuguese fragments** (the
   previous design revision carried `Gespräch`, `atualizá`, `pregunts`, `laconfirmation`).
   Every slice that collects an enumerated field prints the source option list verbatim.
   *Files*: `app/prompts/slices.py`, `app/prompts/system.py` · *closes*: DOC-001
 
-- [ ] **4.6 Identity, estado civil, otra caja**
+- [x] **4.6 Identity, estado civil, otra caja**
   `recoger_identidad` (no-afiliado; `edad` computed server-side from
   `fecha_nacimiento`, never trusted from the LLM), `recoger_estado_civil` (6-value
   domain, derives `tiene_pareja`), `recoger_otra_caja` (no-afiliado only).
   *Files*: `app/graph/nodes/`
 
-- [ ] **4.7 Empleo and the four capacity bundles**
+- [x] **4.7 Empleo and the four capacity bundles**
   `recoger_empleo` stores the specific `contrato_laboral` slug and derives
   `es_empleado`. Each bundle collects `subsidio_vivienda_anterior`, `numero_pac`,
   `condicion_discapacidad_familiar`, `tiene_vivienda_propia`, `ahorros_o_cesantias`,
@@ -219,31 +219,31 @@ design's own risk mitigation for API drift and it still applies.
   `cabeza_de_hogar` and calls `save_lead`.
   *Files*: `app/graph/nodes/` · *closes*: LOGIC-001, LOGIC-004, LOGIC-007
 
-- [ ] **4.8 Intención, scoring, handoff**
+- [x] **4.8 Intención, scoring, handoff**
   `recoger_intencion` persists both `lugar_eleccion_vivir` and `municipio_normalizado`.
   `scoring` is pure: project lookup to set `vis_recommended`, then `score_lead`, then
   `classify_lead`. `handoff` calls `get_projects` **only** when `status=='ready'` and
   renders the matching sub-slice.
   *Files*: `app/graph/nodes/`
 
-- [ ] **4.9 Post-LLM validators**
+- [x] **4.9 Post-LLM validators**
   `app/graph/nodes/_validators.py` — strip out-of-schema answers before merging into
   `lead_profile`; route every enumerated value through the normalizer; append rejects
   to `normalization_notes`.
   *Files*: `app/graph/nodes/_validators.py`
 
-- [ ] **4.10 Crash recovery**
+- [x] **4.10 Crash recovery**
   `app/services/lead_state_rebuilder.py::rebuild_lead_profile(conv_id)`; call it from
   `AgentService.send_message` on the first turn when the checkpointer has no state.
   *Files*: `app/services/lead_state_rebuilder.py`, `app/services/agent_service.py`
 
-- [ ] **4.11 Traversal tests**
+- [x] **4.11 Traversal tests**
   `tests/test_graph_traversal.py` — READY afiliado end to end; a no-afiliado scoring
   in [60, 74] classified `nurture` (proving the 75 threshold); an afiliado aged 17
   terminating at the afiliado-side gate.
   *Files*: `tests/test_graph_traversal.py`
 
-- [ ] **4.12 Wire the graph and retire the ReAct path**
+- [x] **4.12 Wire the graph and retire the ReAct path**
   `builder.py` compiles the 15-node graph behind `LEAD_PROFILER_ENABLED`; remove
   `create_react_agent` once 4.11 is green.
   *Files*: `app/graph/builder.py`, `app/core/config.py`

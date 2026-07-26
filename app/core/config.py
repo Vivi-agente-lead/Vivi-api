@@ -48,6 +48,13 @@ class Settings(BaseSettings):
     agent_timeout_seconds: int = Field(default=60)
     agent_history_limit: int = Field(default=20)
     agent_max_tool_result_chars: int = Field(default=8000)
+    lead_profiler_enabled: bool = Field(
+        default=True,
+        description=(
+            "True: compile the Colsubsidio lead-profiling StateGraph. "
+            "False: fall back to the legacy prebuilt ReAct agent."
+        ),
+    )
 
     # ── WhatsApp ──
     whatsapp_webhook_verify_token: str = Field(default="", description="Token echoed to Meta during the webhook GET handshake.")
