@@ -26,13 +26,13 @@ hints present, `logging.getLogger(__name__)` for output.
 Nothing else starts until 0.1 and 0.2 are done. Both exist because the audit found
 the change's stated risk mitigation did not exist.
 
-- [ ] **0.1 Pin dependencies and commit a lockfile**
+- [x] **0.1 Pin dependencies and commit a lockfile**
   `pyproject.toml` currently declares open lower bounds (`langgraph>=0.5` spans a
   major version). Resolve, pin exact versions, commit the lockfile, and record the
   resolved versions in `openspec/config.yaml` replacing the `KNOWN GAP` note.
   *Files*: `pyproject.toml`, lockfile, `openspec/config.yaml` · *closes*: SDD-005
 
-- [ ] **0.2 Verify the LangGraph API against the installed package**
+- [x] **0.2 Verify the LangGraph API against the installed package**
   With the pinned version installed, confirm in a throwaway script: `StateGraph`
   constructor, `add_conditional_edges` signature, the value of `END`, async node
   return shape, and `compile(checkpointer=...)`. Correct `design.md` §3 if anything
@@ -40,7 +40,7 @@ the change's stated risk mitigation did not exist.
   the current `app/graph/builder.py:27` depends on it until Phase 4 lands.
   *Files*: `design.md` §3 · *closes*: LOGIC-002 (verification), SDD-005
 
-- [ ] **0.3 Remove the duplicated settings field**
+- [x] **0.3 Remove the duplicated settings field**
   `app/core/config.py:56-57` declares `whatsapp_api_version` twice; fix the stray
   de-indentation of the `# ── WhatsApp ──` comment at line 52 while you are there.
   *Files*: `app/core/config.py` · *closes*: CODE-002

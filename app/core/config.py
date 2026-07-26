@@ -49,11 +49,10 @@ class Settings(BaseSettings):
     agent_history_limit: int = Field(default=20)
     agent_max_tool_result_chars: int = Field(default=8000)
 
-# ── WhatsApp ──
+    # ── WhatsApp ──
     whatsapp_webhook_verify_token: str = Field(default="", description="Token echoed to Meta during the webhook GET handshake.")
     whatsapp_api_token: str = Field(default="", description="System user access token for outbound messages via Graph API.")
     whatsapp_phone_number_id: str = Field(default="", description="Phone number id from the Meta dashboard, used in the Graph API URL.")
-    whatsapp_api_version: str = Field(default="v25.0")
     whatsapp_api_version: str = Field(default="v25.0", description="Meta Graph API version (e.g. v25.0).")
 
     @field_validator("postgres_db")
