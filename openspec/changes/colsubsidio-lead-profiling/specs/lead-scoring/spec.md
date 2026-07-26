@@ -212,12 +212,33 @@ measurable distribution target, not as a per-lead hard gate.
 > "`classification='ready'` REQUIRES `afiliado_colsubsidio=true`", drop the 75
 > threshold, and amend the no-afiliado READY scenario in `leads-conversational-flow`.
 
-#### Scenario: Affiliation is a strictly positive signal
+#### Scenario: Affiliation is a strictly positive signal at equal credit standing
 
-- GIVEN two leads identical in every field except affiliation
+- GIVEN two leads identical in every field, and whose credit standing lands in the same band — one afiliado with that `score_credito`, one no-afiliado whose `numero_documento` simulates to the same band
 - WHEN both are scored
-- THEN the afiliado lead's score is strictly greater than the no-afiliado lead's score
-- AND the no-afiliado lead requires a higher score to reach `ready`
+- THEN the afiliado's score exceeds the no-afiliado's by exactly `CATEGORIA_PTS[categoria_afiliado]` (15 for A, 11 for B, 7 for C)
+- AND the no-afiliado lead requires a higher score to reach `ready` (75 versus 60)
+
+> **Why the qualifier.** An earlier revision of this scenario read "identical in every
+> field except affiliation", which is not satisfiable: credit standing is an *input*
+> that differs by construction between the two leads — an afiliado's comes from the
+> afiliado record, a no-afiliado's from the cedula simulation. Since the simulation
+> draws from the full band table, a no-afiliado can legitimately outrank an afiliado
+> whose real `score_credito` is poor. Verified: 30 of 60 sampled documents beat an
+> afiliado at `(C, 500)`. Capping the simulation to force the literal property was
+> tried and rejected — it made a no-afiliado structurally unable to band `Malo` while
+> an afiliado could, which is a worse distortion than the one it fixed.
+>
+> Affiliation is therefore a positive signal **at equal credit standing**, plus the
+> threshold gap. The threshold is the stronger of the two 90/10 levers; the bucket
+> alone does not dominate a credit-band difference, and is not intended to.
+
+#### Scenario: The bureau simulation spans the full band table
+
+- GIVEN the deterministic cedula simulation used for no-afiliado leads
+- WHEN it is evaluated across a range of `numero_documento` values
+- THEN every credit band is reachable, including `Malo`
+- AND the simulation MUST NOT be floored or capped to a sub-range, which would make a simulated lead structurally safer than a real afiliado
 
 #### Scenario: Affiliate share is measurable
 
