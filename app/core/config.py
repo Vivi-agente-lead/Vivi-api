@@ -15,6 +15,18 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 logger = logging.getLogger(__name__)
 
 
+def _with_driver(url: str, scheme: str) -> str:
+    """Rewrite a platform-injected `DATABASE_URL` onto the scheme we need.
+
+    Railway, Render and Heroku hand out `postgres://…` or `postgresql://…`.
+    SQLAlchemy's async engine needs `postgresql+psycopg://`, while the LangGraph
+    checkpointer wants the plain `postgresql://` form, so the same URL is
+    reshaped per consumer instead of asking the operator to set it twice.
+    """
+    _, _, rest = url.partition("://")
+    return f"{scheme}://{rest}" if rest else url
+
+
 class Settings(BaseSettings):
     """Strongly-typed settings loaded from env / .env.
 
@@ -31,6 +43,11 @@ class Settings(BaseSettings):
     app_log_level: str = Field(default="INFO")
 
     # ── Postgres ──
+    # Managed platforms (Railway, Render, Heroku, Fly Postgres) inject one
+    # `DATABASE_URL` rather than the five parts below. When it is present it
+    # wins; otherwise the parts are assembled as before, which is what local
+    # development and docker-compose use.
+    database_url_env: str = Field(default="", validation_alias="DATABASE_URL")
     postgres_user: str = Field(default="vivi")
     postgres_password: str = Field(default="vivi")
     postgres_host: str = Field(default="localhost")
@@ -100,6 +117,8 @@ class Settings(BaseSettings):
     @property
     def database_url(self) -> str:
         """Async SQLAlchemy DSN (psycopg driver)."""
+        if self.database_url_env:
+            return _with_driver(self.database_url_env, "postgresql+psycopg")
         return (
             f"postgresql+psycopg://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
@@ -108,6 +127,8 @@ class Settings(BaseSettings):
     @property
     def pg_async_dsn(self) -> str:
         """Plain psycopg3 async DSN for the LangGraph checkpointer."""
+        if self.database_url_env:
+            return _with_driver(self.database_url_env, "postgresql")
         return (
             f"postgresql://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"

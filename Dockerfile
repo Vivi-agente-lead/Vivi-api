@@ -34,4 +34,9 @@ RUN pip install --no-deps "."
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Managed platforms (Railway, Render, Heroku, Cloud Run) assign the port at
+# runtime through $PORT and route only to that port — a container listening on a
+# hardcoded 8000 fails their health check and the deploy is marked dead. The
+# shell form is required so $PORT is expanded; the fallback keeps `docker run`
+# and docker-compose working unchanged locally.
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
