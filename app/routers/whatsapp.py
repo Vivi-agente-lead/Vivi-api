@@ -23,7 +23,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 
 from app.core.config import settings
 from app.core.db import async_session_maker
-from app.services.inbound_handler import InboundMessageHandler
+from app.services.inbound_handler import SIMULATOR_CHANNEL, InboundMessageHandler
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +108,12 @@ def _inbound_text(msg: dict) -> str | None:
 
 
 async def _process_in_background(
-    wa_id: str, text: str, external_id: str, profile_name: str | None, dry_run: bool = False
+    wa_id: str,
+    text: str,
+    external_id: str,
+    profile_name: str | None,
+    dry_run: bool = False,
+    channel: str = "whatsapp",
 ) -> None:
     """Own its own DB session since it runs after the HTTP response is sent."""
     async with async_session_maker() as session:
@@ -116,7 +121,7 @@ async def _process_in_background(
             handler = InboundMessageHandler(session)
             await handler.handle(
                 wa_id=wa_id, text=text, external_id=external_id,
-                profile_name=profile_name, dry_run=dry_run,
+                profile_name=profile_name, dry_run=dry_run, channel=channel,
             )
         except Exception:
             logger.exception("whatsapp.background.process_failed", extra={"external_id": external_id})
@@ -231,7 +236,9 @@ def _register_simulate_route() -> None:
         ext_id = external_id or f"sim_{uuid.uuid4().hex}"
         profile = "Dev Simulator"
         logger.info("whatsapp.simulate", extra={"from": from_phone, "external_id": ext_id, "dry_run": dry_run})
-        background_tasks.add_task(_process_in_background, from_phone, text, ext_id, profile, dry_run)
+        background_tasks.add_task(
+            _process_in_background, from_phone, text, ext_id, profile, dry_run, SIMULATOR_CHANNEL
+        )
         return {"status": "queued", "from": from_phone, "external_id": ext_id, "dry_run": dry_run}
 
 

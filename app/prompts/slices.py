@@ -22,6 +22,8 @@ from __future__ import annotations
 
 from typing import Final
 
+from app.models.constants import CAJA_COMPENSACION
+
 __all__ = ["SHARED_PREAMBLE", "SLICES", "FIELD_QUESTIONS", "FIELD_OPTIONS"]
 
 SHARED_PREAMBLE: Final[str] = """\
@@ -102,6 +104,11 @@ FIELD_OPTIONS: Final[dict[str, tuple[str, ...]]] = {
         "Ricaurte",
         "Ubaté",
     ),
+    # `otra_caja_compensacion` was previously asked with no option list at all
+    # ("dime a cuál"), so a lead who answered "Sí" had nothing to choose from
+    # and got re-asked (see `logs/conversation-trace.md`). "Ninguna" is listed
+    # first because it is the majority answer.
+    "otra_caja_compensacion": ("Ninguna", *sorted(CAJA_COMPENSACION)),
 }
 
 
@@ -135,9 +142,8 @@ FIELD_QUESTIONS: Final[dict[str, str]] = {
         "por ejemplo 12/03/1990."
     ),
     "estado_civil": _with_options("¿Cuál es tu estado civil?", "estado_civil"),
-    "otra_caja_compensacion": (
-        "¿Estás afiliado a otra caja de compensación? Si es así dime a cuál; "
-        "si no, responde Ninguna."
+    "otra_caja_compensacion": _with_options(
+        "¿Estás afiliado a otra caja de compensación?", "otra_caja_compensacion"
     ),
     "contrato_laboral": _with_options(
         "¿Cuentas con contrato de trabajo o eres independiente?", "contrato_laboral"

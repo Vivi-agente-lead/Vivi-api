@@ -41,7 +41,11 @@ _ESTADO_CIVIL_FIELDS = (
 )
 
 _OTRA_CAJA_FIELDS = (
-    Field(name="otra_caja_compensacion", parse=parse_caja_compensacion),
+    Field(
+        name="otra_caja_compensacion",
+        parse=parse_caja_compensacion,
+        options_key="otra_caja_compensacion",
+    ),
 )
 
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Sequence
 
 import httpx
 
@@ -74,6 +74,59 @@ class WhatsAppClient:
             },
         }
         return await self._post(to, payload, label="send_template")
+
+    async def send_interactive_buttons(
+        self, to: str, body: str, buttons: Sequence[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Send a quick-reply `interactive.type == "button"` message.
+
+        Meta caps this at 3 buttons; `buttons` is expected to already respect
+        that (see `app.services.whatsapp_interactive.render_options`) — this
+        method does not re-validate the shape, only posts it.
+        """
+        if not settings.whatsapp_api_token:
+            logger.warning("whatsapp.send_interactive_buttons.skipped", extra={"reason": "no_token", "to": to})
+            return {"status": "skipped", "reason": "WHATSAPP_API_TOKEN not configured"}
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": to,
+            "type": "interactive",
+            "interactive": {
+                "type": "button",
+                "body": {"text": body},
+                "action": {"buttons": list(buttons)},
+            },
+        }
+        return await self._post(to, payload, label="send_interactive_buttons")
+
+    async def send_interactive_list(
+        self,
+        to: str,
+        body: str,
+        sections: Sequence[dict[str, Any]],
+        *,
+        button_text: str = "Ver opciones",
+    ) -> dict[str, Any]:
+        """Send an `interactive.type == "list"` message (up to 10x10 rows).
+
+        `sections` is expected to already respect Meta's caps (see
+        `app.services.whatsapp_interactive.render_options`) — this method does
+        not re-validate the shape, only posts it.
+        """
+        if not settings.whatsapp_api_token:
+            logger.warning("whatsapp.send_interactive_list.skipped", extra={"reason": "no_token", "to": to})
+            return {"status": "skipped", "reason": "WHATSAPP_API_TOKEN not configured"}
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": to,
+            "type": "interactive",
+            "interactive": {
+                "type": "list",
+                "body": {"text": body},
+                "action": {"button": button_text, "sections": list(sections)},
+            },
+        }
+        return await self._post(to, payload, label="send_interactive_list")
 
     async def _post(self, to: str, payload: dict[str, Any], *, label: str) -> dict[str, Any]:
         """Shared HTTP POST to the Graph API messages endpoint."""
