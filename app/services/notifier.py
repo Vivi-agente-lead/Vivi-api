@@ -72,11 +72,19 @@ async def notify_lead_qualified(
     notifier = notifier or get_notifier()
     nombre = profile.get("nombre_apellido") or profile.get("numero_documento") or "sin nombre"
     subject = f"Lead calificado: {nombre}"
-    body = (
-        f"Documento: {profile.get('tipo_documento')} {profile.get('numero_documento')}\n"
-        f"Score: {profile.get('score')} ({profile.get('score_rating')})\n"
-        f"Municipio: {profile.get('municipio_normalizado')}\n"
-        f"Interés en asesor de crédito: {quiere_asesor_credito}"
+    # The same render the `/reporte` pages serve, so what an asesor would read
+    # in the inbox and what a juror opens in the browser cannot drift apart.
+    from app.services.lead_report import build_report, render_text
+
+    body = render_text(build_report(profile))
+    if quiere_asesor_credito is not None:
+        body += (
+            "\n\nASESOR DE CRÉDITO\n  "
+            + ("Solicitó que lo contacten." if quiere_asesor_credito
+               else "No solicitó asesoría de crédito.")
+        )
+    body += (
+        f"\n\nPerfil completo: /reporte/{profile.get('numero_documento') or ''}"
     )
     await notifier.send(
         subject=subject,

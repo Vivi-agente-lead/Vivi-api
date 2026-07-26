@@ -13,7 +13,7 @@ from fastapi import FastAPI
 
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
-from app.routers import health, whatsapp
+from app.routers import health, reportes, whatsapp
 from app.services import checkpointer_factory
 
 logger = logging.getLogger(__name__)
@@ -65,6 +65,7 @@ app = FastAPI(title="vivi-api", version="0.1.0", lifespan=lifespan)
 # Routers
 app.include_router(health.router)
 app.include_router(whatsapp.router)
+app.include_router(reportes.router)
 
 # Exception handlers
 register_exception_handlers(app)
