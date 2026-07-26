@@ -219,7 +219,7 @@ design's own risk mitigation for API drift and it still applies.
   `cabeza_de_hogar` and calls `save_lead`.
   *Files*: `app/graph/nodes/` · *closes*: LOGIC-001, LOGIC-004, LOGIC-007
 
-- [ ] **4.8 Intención, scoring, handoff**
+- [x] **4.8 Intención, scoring, handoff**
   `recoger_intencion` persists both `lugar_eleccion_vivir` and `municipio_normalizado`.
   `scoring` is pure: project lookup to set `vis_recommended`, then `score_lead`, then
   `classify_lead`. `handoff` calls `get_projects` **only** when `status=='ready'` and
@@ -237,7 +237,7 @@ design's own risk mitigation for API drift and it still applies.
   `AgentService.send_message` on the first turn when the checkpointer has no state.
   *Files*: `app/services/lead_state_rebuilder.py`, `app/services/agent_service.py`
 
-- [ ] **4.11 Traversal tests**
+- [x] **4.11 Traversal tests**
   `tests/test_graph_traversal.py` — READY afiliado end to end; a no-afiliado scoring
   in [60, 74] classified `nurture` (proving the 75 threshold); an afiliado aged 17
   terminating at the afiliado-side gate.

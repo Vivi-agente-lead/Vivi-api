@@ -14,6 +14,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import date
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -178,6 +179,7 @@ def make_afiliado(
     score_credito: int = 880,
     edad: int = 34,
     estado_civil: str | None = None,
+    salario_base_cotizacion: Decimal | None = None,
     ha_recibido_subsidio: bool = False,
 ) -> AfiliadoColsubsidioEntity:
     """An affiliate whose stored `fecha_nacimiento` yields exactly `edad` today."""
@@ -189,6 +191,7 @@ def make_afiliado(
         nombre_apellido=nombre_apellido,
         fecha_nacimiento=birth,
         estado_civil=estado_civil,
+        salario_base_cotizacion=salario_base_cotizacion,
         categoria_afiliado=categoria_afiliado,
         score_credito=score_credito,
         ha_recibido_subsidio=ha_recibido_subsidio,
