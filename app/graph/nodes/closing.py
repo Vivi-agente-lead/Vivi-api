@@ -33,38 +33,40 @@ _INTENCION_FIELDS = (
         parse=lambda raw: raw if validate_municipio(raw) else None,
         options_key="lugar_eleccion_vivir",
     ),
+    Field(name="descripcion_vivienda_sueno", parse=parse_free_text),
     Field(
         name="tiempo_compra_deseado",
         parse=lambda raw: validate_enumerated("tiempo_compra_deseado", raw),
         options_key="tiempo_compra_deseado",
     ),
-    Field(name="descripcion_vivienda_sueno", parse=parse_free_text),
 )
 
 _INTENCION_PERSIST = (
     "lugar_eleccion_vivir",
     "municipio_normalizado",
-    "tiempo_compra_deseado",
     "descripcion_vivienda_sueno",
+    "tiempo_compra_deseado",
 )
 
+# v2 renames the terminal status vocabulary (docs/v2-impact-analysis.md §7):
+# ready → calificado, nurture → nutrible, nurture_social → no_calificado.
 _HANDOFF_SLICES = {
-    "ready": "handoff_ready",
-    "nurture": "handoff_nurture",
-    "nurture_social": "handoff_nurture_social",
+    "calificado": "handoff_calificado",
+    "nutrible": "handoff_nutrible",
+    "no_calificado": "handoff_no_calificado",
 }
 
 _HANDOFF_FALLBACK = {
-    "ready": (
-        "¡Gracias por tus respuestas! Con lo que me contaste, un asesor de "
-        "vivienda de Colsubsidio te va a contactar para acompañarte en el "
-        "siguiente paso."
+    "calificado": (
+        "Me ha encantado tu entusiasmo en la búsqueda de tu hogar ideal. Un "
+        "asesor de vivienda de Colsubsidio te va a contactar para acompañarte "
+        "en el siguiente paso."
     ),
-    "nurture": (
+    "nutrible": (
         "Gracias por tus respuestas. Voy a guardar tu información y te vamos a "
         "contactar más adelante con opciones que se ajusten a tu situación."
     ),
-    "nurture_social": (
+    "no_calificado": (
         "Gracias por tu tiempo y por la confianza. Un asistente social de "
         "Colsubsidio puede orientarte sobre los programas de apoyo a los que "
         "puedes acceder hoy; con gusto te ponemos en contacto."
@@ -136,15 +138,16 @@ async def scoring(state: Any, config: RunnableConfig) -> dict[str, Any]:
 async def handoff(state: Any, config: RunnableConfig) -> dict[str, Any]:
     """Close the conversation with the next step this lead has earned.
 
-    `get_projects` runs **only** for a `ready` lead: showing a catalogue to a
-    lead who does not qualify is precisely the commercial noise the change
-    exists to remove.
+    `get_projects` runs **only** for a `calificado` lead: showing a catalogue
+    to a lead who does not qualify is precisely the commercial noise the
+    change exists to remove. Only `Calificado` continues in the v2 diagram —
+    `Nutrible` and `No calificado` are terminal with no follow-up drawn.
     """
     profile = profile_of(state)
-    status = profile.get("status") or "nurture"
-    text = _HANDOFF_FALLBACK.get(status, _HANDOFF_FALLBACK["nurture"])
+    status = profile.get("status") or "nutrible"
+    text = _HANDOFF_FALLBACK.get(status, _HANDOFF_FALLBACK["nutrible"])
 
-    if status == "ready":
+    if status == "calificado":
         proyectos = await _ready_projects(profile, config)
         if proyectos:
             listing = "\n".join(f"- {name}" for name in proyectos)
@@ -152,7 +155,7 @@ async def handoff(state: Any, config: RunnableConfig) -> dict[str, Any]:
 
     message = await say(
         state,
-        node=_HANDOFF_SLICES.get(status, "handoff_nurture"),
+        node=_HANDOFF_SLICES.get(status, "handoff_nutrible"),
         profile=profile,
         text=text,
     )

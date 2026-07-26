@@ -12,20 +12,36 @@ MUST NOT perform substring matching on user- or LLM-supplied text.
 Normalization lives in a pure module (`app/services/domain_normalizer.py`); the
 verbatim labels remain the vocabulary shown to the user and to the LLM.
 
+> **v2 migration** (`docs/v2-impact-analysis.md`): `tipo_documento` gains a
+> sixth option (`Carné Diplomático`); `contrato_laboral` gains a fourth
+> (`Independiente`, now distinct from `Prestacion de servicios` — the v2
+> sheet's column O and column P disagree on this, and column O, the four-value
+> list, is followed; see the apply report); `antiguedad_laboral` is removed
+> (the field it backed no longer exists); `interes_afiliacion` and
+> `preferencia_vis` are added.
+
 | Field | Verbatim source labels | Canonical slugs |
 |---|---|---|
-| `tipo_documento` | Cédula de ciudadanía · Cédula de extranjería · Pasaporte · Permiso Especial de Permanencia · Permiso por Protección Temporal | `CC` · `CE` · `PA` · `PEP` · `PPT` |
+| `tipo_documento` | Cédula de ciudadanía · Cédula de extranjería · Pasaporte · Permiso Especial de Permanencia · Permiso por Protección Temporal · Carné Diplomático | `CC` · `CE` · `PA` · `PEP` · `PPT` · `CD` |
 | `estado_civil` | Soltero · Casado · Divorciado · Union libre · Separado · Viudo | `soltero` · `casado` · `divorciado` · `union_libre` · `separado` · `viudo` |
-| `contrato_laboral` | Termino fijo · Termino indefinido · Prestacion de servicios | `termino_fijo` · `termino_indefinido` · `prestacion_servicios` |
+| `contrato_laboral` | Termino fijo · Termino indefinido · Prestacion de servicios · Independiente | `termino_fijo` · `termino_indefinido` · `prestacion_servicios` · `independiente` |
 | `rango_salarial` | 2 millones o menos · 2 a 4 millones · 4 a 8 millones · 8 a 10 millones · mas de 10 millones | `hasta_2m` · `2_4m` · `4_8m` · `8_10m` · `mas_10m` |
-| `antiguedad_laboral` | Menos de 1 año · 1 a 2 años · Mas de dos años | `menos_1a` · `1_2a` · `mas_2a` |
 | `ahorros_o_cesantias` | No tengo ahorros. · Menos de $3 millones · Entre $3 y $10 millones · Entre $10 y $20 millones · Entre $20 y $40 millones · Más de $40 millones | `ninguno` · `menos_3m` · `3_10m` · `10_20m` · `20_40m` · `mas_40m` |
 | `tiempo_compra_deseado` | 3 meses · 6 meses · 1 año · 2 años · No sé | `3_meses` · `6_meses` · `1_ano` · `2_anos` · `no_se` |
+| `interes_afiliacion` (v2, no-afiliado path only) | No, estoy afiliado a otra caja de compensación · Si estoy interesado en afiliarme · No, prefiero en otro momento. | `afiliado_otra_caja` · `interesado_afiliarse` · `prefiere_otro_momento` |
+| `preferencia_vis` (v2) | VIS · NO VIS · Ambas | `vis` · `no_vis` · `ambas` |
 
 Two predicates are derived, never collected:
 
 - `tiene_pareja` := `estado_civil in {casado, union_libre}`
 - `es_empleado` := `contrato_laboral in {termino_fijo, termino_indefinido}`
+
+A third value is derived, never collected, and gated to the no-afiliado path
+(`docs/v2-impact-analysis.md` §5):
+
+- `otra_caja_compensacion` := `interes_afiliacion == "afiliado_otra_caja"` (for
+  an afiliado, both `interes_afiliacion` and `otra_caja_compensacion` stay
+  `NULL` — the question is never asked)
 
 #### Scenario: Verbatim labels normalize to canonical slugs
 
@@ -48,14 +64,18 @@ Two predicates are derived, never collected:
 - WHEN `tiene_pareja` is derived
 - THEN `tiene_pareja` is `false`
 - AND the lead follows the same collection path as `soltero`
-- AND `cabeza_de_hogar` is `true`
+
+> **v2 migration**: this scenario no longer asserts `cabeza_de_hogar` — the
+> field is removed (absent from the v2 sheet).
 
 ### Requirement: Deterministic Lead Scoring
 
 The system MUST compute a lead score via a pure-Python scorer `app/services/lead_scorer.py` with signature `score_lead(lead, afiliado) -> (score: int, rating_label: str, classification: str, reasoning: str)`. The scorer MUST be deterministic (same input → same output, no randomness, no time-of-day dependencies) and MUST NOT make LLM or network calls.
 
 `classification` and the persisted `lead.status` MUST carry the same value from the
-single domain {`ready`, `nurture`, `nurture_social`}.
+single domain {`calificado`, `nutrible`, `no_calificado`} (v2 rename of
+{`ready`, `nurture`, `nurture_social`} — see `lead-data-model`'s "Lead status
+transitions" scenario).
 
 #### Scenario: Score range invariant
 
@@ -67,11 +87,19 @@ single domain {`ready`, `nurture`, `nurture_social`}.
 
 #### Scenario: Bucket credits are capped at the documented maxima
 
+> **v2 re-budget** (`docs/v2-impact-analysis.md` §10, §12): `antiguedad_
+> laboral` is removed, so Bucket 6 ("Estabilidad", contract type × tenure) has
+> no input left. It is replaced by "Capacidad" (disposable-income ratio,
+> `total_ingresos_mensuales` vs `gastos_mensuales`), keeping the same 15-point
+> ceiling so the six maxima still sum to 100. The `discapacidad/PAC` red flag
+> loses its `condicion_discapacidad_familiar` trigger (field removed); only
+> `numero_pac > 0` remains, unchanged at `+8`.
+
 - GIVEN a lead that would exceed every bucket maximum
 - WHEN the scorer sums per-bucket contributions
-- THEN the Credito bucket contribution MUST NOT exceed 25, Afiliacion 15, Ingreso 20, Ahorro 15, Tiempo_compra 10, Estabilidad 15
+- THEN the Credito bucket contribution MUST NOT exceed 25, Afiliacion 15, Ingreso 20, Ahorro 15, Tiempo_compra 10, Capacidad 15
 - AND the six maxima sum to exactly 100
-- AND red-flag adjustments (vivienda_propia+VIS -15, creditos_activos -5, discapacidad/PAC +8) are applied additively to the sum, then clamped to [0, 100]
+- AND red-flag adjustments (vivienda_propia+VIS -15, creditos_activos -5, PAC +8) are applied additively to the sum, then clamped to [0, 100]
 
 #### Scenario: Bucket 1 — Credito (max 25)
 
@@ -115,22 +143,49 @@ single domain {`ready`, `nurture`, `nurture_social`}.
 - WHEN the Tiempo bucket is evaluated
 - THEN points are `3_meses` → 10, `6_meses` → 8, `1_ano` → 5, `2_anos` → 2, `no_se` → 0
 
-#### Scenario: Bucket 6 — Estabilidad (max 15)
+#### Scenario: Bucket 6 — Capacidad (max 15) [MODIFIED — v2, replaces Estabilidad]
 
-- GIVEN an empleado lead (`es_empleado` is true) with a canonical `antiguedad_laboral`
-- WHEN the Estabilidad bucket is evaluated
-- THEN `termino_indefinido` scores `mas_2a` → 15, `1_2a` → 11, `menos_1a` → 7
-- AND `termino_fijo` scores `mas_2a` → 12, `1_2a` → 9, `menos_1a` → 5
-- GIVEN an independiente lead (`contrato_laboral='prestacion_servicios'`)
+> Supersedes the v1 "Bucket 6 — Estabilidad" scenario. `antiguedad_laboral` no
+> longer exists (`docs/v2-impact-analysis.md` §3); the replacement bucket is
+> this change's own design decision (not stated verbatim in either v2 source
+> document), documented in full in `app/services/lead_scorer.py`'s
+> `CAPACIDAD_BANDS` docstring.
+
+- GIVEN a lead with both `total_ingresos_mensuales` and `gastos_mensuales` set, `ingreso > 0`
+- WHEN the Capacidad bucket is evaluated
+- THEN `ratio := (ingreso - gastos) / ingreso` is computed
+- AND points are awarded `ratio >= 0.50` → 15, `0.35 <= ratio < 0.50` → 11, `0.20 <= ratio < 0.35` → 7, `0.05 <= ratio < 0.20` → 3, `ratio < 0.05` → 0
+- GIVEN `total_ingresos_mensuales` or `gastos_mensuales` is NULL, unrecognized, or `total_ingresos_mensuales <= 0`
 - WHEN the bucket is evaluated
-- THEN the contribution is `6` and `antiguedad_laboral` is not consulted
-- AND no additive bonus is applied on top of these values (the contract type IS the differentiator)
+- THEN the contribution is `0`
+
+#### Scenario: `pos_subsidio` rule [ADDED — v2]
+
+> The v2 flow diagram branches from the (no-afiliado-only) `interes_
+> afiliacion` question to `Setear variable pos_subsidio = 0` when the lead is
+> affiliated to another caja de compensación (`docs/v2-impact-analysis.md`
+> §5). This is a named rule, not a scored bucket: it does not change the
+> numeric `score` (neither v2 source document states a point penalty), and it
+> is never folded into an existing bucket — it surfaces its own line in
+> `classification_reasoning`.
+
+- GIVEN a no-afiliado lead with `otra_caja_compensacion=true` (derived from `interes_afiliacion == "afiliado_otra_caja"`)
+- WHEN the scorer runs
+- THEN `pos_subsidio` is set to `0`, and `reasoning` contains a line naming it
+- AND the numeric `score` is unaffected
+- AND the lead is NOT disqualified — `pos_subsidio=0` reduces purchasing capacity, it does not gate `calificado`
+- GIVEN an afiliado lead (the affiliation question is gated to non-affiliates, so `otra_caja_compensacion` is always NULL for them)
+- WHEN the scorer runs
+- THEN `pos_subsidio` is `1` — a NULL `otra_caja_compensacion` MUST NOT be treated as "affiliated elsewhere" by truthiness
+- GIVEN a no-afiliado lead with `otra_caja_compensacion` NULL or `false`
+- WHEN the scorer runs
+- THEN `pos_subsidio` is `1`
 
 #### Scenario: Subsidio previo absolute override
 
-- GIVEN a lead whose numeric score would otherwise classify as `ready` but `subsidio_vivienda_anterior=true`
+- GIVEN a lead whose numeric score would otherwise classify as `calificado` but `subsidio_vivienda_anterior=true`
 - WHEN `score_lead` runs
-- THEN `classification='nurture'` regardless of the numeric score
+- THEN `classification='nutrible'` regardless of the numeric score
 - AND `reasoning` MUST contain the literal substring "Subsidio de vivienda previo otorgado — no califica para nuevo subsidio"
 - AND the numeric `score` is still computed and returned for analytics
 - AND the override applies identically to afiliado and no-afiliado leads, and to every `estado_civil`
@@ -139,32 +194,43 @@ single domain {`ready`, `nurture`, `nurture_social`}.
 
 - GIVEN an afiliado lead with `subsidio_vivienda_anterior=false` and computed score >= 60
 - WHEN the scorer runs
-- THEN `classification='ready'`
+- THEN `classification='calificado'`
 - GIVEN a no-afiliado lead with `subsidio_vivienda_anterior=false` and computed score >= 75
 - WHEN the scorer runs
-- THEN `classification='ready'`
+- THEN `classification='calificado'`
 - GIVEN a no-afiliado lead with computed score in [60, 74]
 - WHEN the scorer runs
-- THEN `classification='nurture'` (the affiliate threshold does not apply)
+- THEN `classification='nutrible'` (the affiliate threshold does not apply)
 
-#### Scenario: NURTURE threshold
+#### Scenario: NUTRIBLE threshold
 
 - GIVEN a lead with `subsidio_vivienda_anterior=false` and a computed score at or above 30 but below its applicable READY threshold
 - WHEN the scorer runs
-- THEN `classification='nurture'`
+- THEN `classification='nutrible'`
 
-#### Scenario: NURTURE_SOCIAL threshold
+#### Scenario: NO_CALIFICADO threshold
 
 - GIVEN a lead with `subsidio_vivienda_anterior=false` and computed score < 30
 - WHEN the scorer runs
-- THEN `classification='nurture_social'`
+- THEN `classification='no_calificado'`
 
-#### Scenario: Red flag — vivienda propia pursuing VIS
+#### Scenario: Red flag — vivienda propia pursuing VIS [MODIFIED — graph-topology migration]
 
-- GIVEN a lead with `tiene_vivienda_propia=true` and `vis_recommended=true`
+> Amends the v1 "vivienda propia pursuing VIS" scenario: `preferencia_vis`, a
+> field v2 collects directly, now takes priority over the derived
+> `vis_recommended` when present (decided, `docs/v2-impact-analysis.md` §4,
+> §12 "The VIS red flag").
+
+- GIVEN a lead with `tiene_vivienda_propia=true` and `preferencia_vis` in {`vis`, `ambas`}
 - WHEN the scorer runs
-- THEN the score subtracts 15
-- GIVEN `vis_recommended=false` or NULL
+- THEN the score subtracts 15, regardless of the derived `vis_recommended` value
+- GIVEN a lead with `tiene_vivienda_propia=true` and `preferencia_vis='no_vis'`
+- WHEN the scorer runs
+- THEN no deduction is applied, even if `vis_recommended=true` — the stated preference suppresses the derived one
+- GIVEN a lead with `tiene_vivienda_propia=true`, `preferencia_vis` NULL (not collected — the graph-topology migration's linear qualification flow does not yet ask it; see `leads-conversational-flow`), and `vis_recommended=true`
+- WHEN the scorer runs
+- THEN the score subtracts 15 — the fallback to the derived value applies only when `preferencia_vis` was never collected
+- GIVEN `preferencia_vis` NULL and `vis_recommended=false` or NULL
 - WHEN the scorer runs
 - THEN no deduction is applied
 
@@ -174,9 +240,13 @@ single domain {`ready`, `nurture`, `nurture_social`}.
 - WHEN the scorer runs
 - THEN the score subtracts 5
 
-#### Scenario: Red flag — discapacidad/PAC bonus
+#### Scenario: Red flag — PAC bonus [MODIFIED — v2]
 
-- GIVEN a lead with `condicion_discapacidad_familiar=true` OR `numero_pac > 0`
+> Supersedes the v1 "discapacidad/PAC bonus" scenario: `condicion_
+> discapacidad_familiar` is removed (`docs/v2-impact-analysis.md` §3); only
+> the `numero_pac` trigger remains. The `+8` value is unchanged.
+
+- GIVEN a lead with `numero_pac > 0`
 - WHEN the scorer runs
 - THEN the score adds 8
 - AND the bonus is reachable from every collection path, including `soltero` + afiliado
@@ -201,7 +271,7 @@ qualified leads must be Colsubsidio affiliates**. The system MUST encode this as
 measurable distribution target, not as a per-lead hard gate.
 
 > **Recorded decision.** The rule is a property of the READY *set*, not of an
-> individual lead. A hard gate (`afiliado_colsubsidio=false` ⇒ never `ready`) would
+> individual lead. A hard gate (`afiliado_colsubsidio=false` ⇒ never `calificado`) would
 > contradict the required scenario "Happy path no-afiliado reaches READY" in
 > `leads-conversational-flow`, and the brief itself frames the no-afiliado regulatory
 > bottleneck as worth handling rather than excluding. The target is therefore driven by
@@ -209,15 +279,19 @@ measurable distribution target, not as a per-lead hard gate.
 > dependent READY threshold (60 vs 75) — and monitored.
 >
 > **Alternative, if the team prefers a hard gate**: replace this requirement with
-> "`classification='ready'` REQUIRES `afiliado_colsubsidio=true`", drop the 75
+> "`classification='calificado'` REQUIRES `afiliado_colsubsidio=true`", drop the 75
 > threshold, and amend the no-afiliado READY scenario in `leads-conversational-flow`.
+>
+> **v2 rename** (`docs/v2-impact-analysis.md` §7): `ready` → `calificado`
+> throughout this requirement; the decision and the two structural levers are
+> unchanged.
 
 #### Scenario: Affiliation is a strictly positive signal at equal credit standing
 
 - GIVEN two leads identical in every field, and whose credit standing lands in the same band — one afiliado with that `score_credito`, one no-afiliado whose `numero_documento` simulates to the same band
 - WHEN both are scored
 - THEN the afiliado's score exceeds the no-afiliado's by exactly `CATEGORIA_PTS[categoria_afiliado]` (15 for A, 11 for B, 7 for C)
-- AND the no-afiliado lead requires a higher score to reach `ready` (75 versus 60)
+- AND the no-afiliado lead requires a higher score to reach `calificado` (75 versus 60)
 
 > **Why the qualifier.** An earlier revision of this scenario read "identical in every
 > field except affiliation", which is not satisfiable: credit standing is an *input*
@@ -243,6 +317,6 @@ measurable distribution target, not as a per-lead hard gate.
 #### Scenario: Affiliate share is measurable
 
 - GIVEN a populated `leads` table
-- WHEN the affiliate share of qualified leads is queried as `count(status='ready' AND afiliado_colsubsidio=true) / count(status='ready')`
+- WHEN the affiliate share of qualified leads is queried as `count(status='calificado' AND afiliado_colsubsidio=true) / count(status='calificado')`
 - THEN the query runs against persisted columns with no recomputation
 - AND the value is reported in the juror walkthrough

@@ -49,16 +49,17 @@ The system MUST expose exactly five tools to the agent runtime: `lookup_afiliado
 - WHEN `get_lead()` is called
 - THEN the tool returns `null` (no exception) — defensive against LLM asking for context before any save
 
-#### Scenario: get_projects filtered for READY recommendation
+#### Scenario: get_projects filtered for Calificado recommendation
 
-- GIVEN a READY-classified lead whose `lugar_eleccion_vivir` is `'Bogotá norte'` and whose `municipio_normalizado` is therefore `'Bogota'`
+- GIVEN a `calificado`-classified lead whose `lugar_eleccion_vivir` is `'Bogotá norte'` and whose `municipio_normalizado` is therefore `'Bogota'`
 - AND `proyectos_colsubsidio` holds rows where `municipio='Bogota'`
 - WHEN `get_projects(municipio='Bogota', tipo=None)` is called
 - THEN the tool returns up to 5 matching projects ordered deterministically (by `proyecto`, then `modelo`)
 - AND the tool MUST be called with `municipio_normalizado`, never with the raw `lugar_eleccion_vivir`, because the source municipio values are unaccented (`Bogota`, `Ubate`) and would not match the accented lead-facing options
-- GIVEN a NURTURE or `nurture_social` lead
+- GIVEN a `nutrible` or `no_calificado` lead
 - WHEN the handoff node runs
-- THEN it MUST NOT invoke `get_projects` (no recommendation path for non-READY)
+- THEN it MUST NOT invoke `get_projects` (no recommendation path for a lead that is not `calificado`)
+- **Amended by the graph-topology migration (`docs/v2-impact-analysis.md` §1, §8)**: this MUST holds for the linear qualification flow this change ships (Block A). The v2 source diagram's project-browsing loop (`Quiero ver otro proyecto.` → `¿Te interesan vivienda VIS, NO VIS o ambas?` → municipio → `Mostrar menu de proyectos disponibles…`) calls `get_projects` **before** qualification, for any lead browsing the catalogue — a later work unit that amends this scenario again when that loop ships; it is not implemented by, and does not contradict, this revision
 
 #### Scenario: get_projects tolerates the corrupt municipio value
 
@@ -73,7 +74,7 @@ The system MUST expose exactly five tools to the agent runtime: `lookup_afiliado
 - WHEN `classify_lead()` is called
 - THEN the tool invokes `lead_scorer.score_lead`, persists `status`, `score`, `score_rating`, `classification_reasoning` onto the row
 - AND returns a verdict dict `{status, score, score_rating, classification, reasoning}` to the caller
-- AND `classification` equals `status` and is one of {`ready`, `nurture`, `nurture_social`} — a single domain shared with `lead-scoring` and `lead-data-model`
+- AND `classification` equals `status` and is one of {`calificado`, `nutrible`, `no_calificado`} — a single domain shared with `lead-scoring` and `lead-data-model` (v2 rename, `docs/v2-impact-analysis.md` §7: `ready`/`nurture`/`nurture_social` → `calificado`/`nutrible`/`no_calificado`)
 
 #### Scenario: Tool wiring uses ToolContext, not LLM args
 

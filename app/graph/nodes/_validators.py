@@ -19,22 +19,16 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any, Final
 
-from app.models.constants import (
-    CAJA_COMPENSACION,
-    CONTRATO_EMPLEADO,
-    ESTADO_CIVIL_CON_PAREJA,
-)
+from app.models.constants import CONTRATO_EMPLEADO, ESTADO_CIVIL_CON_PAREJA
 from app.graph.nodes._tolerance import interpret
 from app.services.domain_normalizer import normalize, normalize_municipio
 
 __all__ = [
     "derive_tiene_pareja",
     "derive_es_empleado",
-    "derive_cabeza_de_hogar",
     "derive_rango_salarial",
     "fold",
     "note_rejected",
@@ -46,7 +40,6 @@ __all__ = [
     "parse_fecha_nacimiento",
     "parse_numero_documento",
     "parse_nombre",
-    "parse_caja_compensacion",
     "parse_free_text",
 ]
 
@@ -96,25 +89,6 @@ _CERO: Final[frozenset[str]] = frozenset(
     {"ninguno", "ninguna", "cero", "nadie", "no", "no tengo", "n/a", "ninguno."}
 )
 
-_MESES: Final[dict[str, int]] = {
-    "enero": 1,
-    "febrero": 2,
-    "marzo": 3,
-    "abril": 4,
-    "mayo": 5,
-    "junio": 6,
-    "julio": 7,
-    "agosto": 8,
-    "septiembre": 9,
-    "setiembre": 9,
-    "octubre": 10,
-    "noviembre": 11,
-    "diciembre": 12,
-}
-
-_ISO_DATE = re.compile(r"\b(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b")
-_DMY_DATE = re.compile(r"\b(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})\b")
-_TEXT_DATE = re.compile(r"\b(\d{1,2})\s+de\s+([a-z]+)\s+(?:de\s+|del\s+)?(\d{4})\b")
 _INT = re.compile(r"-?\d+")
 _MILLONES = re.compile(r"\b(millon|millones)\b")
 
@@ -184,19 +158,6 @@ _RANGO_SALARIAL_BANDS: Final[tuple[tuple[Decimal, str], ...]] = (
     (Decimal(8_000_000), "4_8m"),
     (Decimal(10_000_000), "8_10m"),
 )
-
-
-def derive_cabeza_de_hogar(profile: dict[str, Any]) -> bool:
-    """Source note: "Si es soltero o casado y tiene PAC entonces SI".
-
-    Leads without a partner are always cabeza de hogar; leads with a partner
-    only when they have dependants. Applied at the end of every capacity bundle
-    — the one place all four branches converge and where `numero_pac` is
-    collected.
-    """
-    if not profile.get("tiene_pareja"):
-        return True
-    return (profile.get("numero_pac") or 0) > 0
 
 
 # ── Audit note ──────────────────────────────────────────────────────────────
@@ -320,46 +281,6 @@ def parse_decimal(raw: str | None) -> Decimal | None:
     return value
 
 
-def parse_fecha_nacimiento(raw: str | None) -> date | None:
-    """A birth date in ISO, `dd/mm/yyyy` or `12 de marzo de 1990` form.
-
-    Returns `None` for anything unparseable or in the future — the age gate must
-    never run on a guessed date.
-    """
-    if raw is None:
-        return None
-    text = fold(raw)
-    if not text:
-        return None
-
-    parsed: date | None = None
-    iso = _ISO_DATE.search(text)
-    if iso is not None:
-        parsed = _safe_date(int(iso.group(1)), int(iso.group(2)), int(iso.group(3)))
-    if parsed is None:
-        dmy = _DMY_DATE.search(text)
-        if dmy is not None:
-            parsed = _safe_date(int(dmy.group(3)), int(dmy.group(2)), int(dmy.group(1)))
-    if parsed is None:
-        textual = _TEXT_DATE.search(text)
-        if textual is not None:
-            month = _MESES.get(textual.group(2))
-            if month is not None:
-                parsed = _safe_date(
-                    int(textual.group(3)), month, int(textual.group(1))
-                )
-    if parsed is None or parsed > date.today():
-        return None
-    return parsed
-
-
-def _safe_date(year: int, month: int, day: int) -> date | None:
-    try:
-        return date(year, month, day)
-    except ValueError:
-        return None
-
-
 def parse_numero_documento(raw: str | None) -> str | None:
     """The document number: digits only, 6 to 12 of them."""
     if raw is None:
@@ -381,21 +302,6 @@ def parse_nombre(raw: str | None) -> str | None:
     if len(letters) < 2:
         return None
     return text
-
-
-def parse_caja_compensacion(raw: str | None) -> str | None:
-    """A caja de compensación from the controlled vocabulary, or `ninguna`."""
-    if raw is None:
-        return None
-    text = fold(raw)
-    if not text:
-        return None
-    if text in {"ninguna", "ninguno", "no", "no tengo", "ninguna."}:
-        return "ninguna"
-    for caja in CAJA_COMPENSACION:
-        if fold(caja) == text:
-            return caja
-    return None
 
 
 def parse_free_text(raw: str | None, *, max_length: int = 2000) -> str | None:

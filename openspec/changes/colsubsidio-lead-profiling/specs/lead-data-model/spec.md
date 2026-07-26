@@ -8,17 +8,51 @@ The system MUST replace the existing `LeadEntity` with the Colsubsidio lead sche
 
 #### Scenario: Lead table replacement
 
+> **v2 migration** (`docs/v2-impact-analysis.md`): this scenario reflects the
+> v2 field set. `antiguedad_laboral`, `condicion_discapacidad_familiar` and
+> `cabeza_de_hogar` are removed (absent from the v2 sheet).
+> `total_ingresos_mensuales` and `total_ingresos_familiares_mensuales`
+> collapse into the single `total_ingresos_mensuales` (v2 asks one
+> household-income question of everyone). `interes_afiliacion`,
+> `gastos_mensuales` and `preferencia_vis` are added.
+
 - GIVEN the app DB is empty
 - WHEN the schema is created
-- THEN the `leads` table exists with all canonical lead columns (tipo_documento, numero_documento, afiliado_colsubsidio, nombre_apellido, categoria, otra_caja_compensacion, estado_civil, edad, contrato_laboral, rango_salarial, total_ingresos_mensuales, total_ingresos_familiares_mensuales, antiguedad_laboral, tiene_vivienda_propia, ahorros_o_cesantias, condicion_discapacidad_familiar, numero_pac, tiene_creditos_activos, subsidio_vivienda_anterior, cabeza_de_hogar, lugar_eleccion_vivir, municipio_normalizado, tiempo_compra_deseado, descripcion_vivienda_sueno, status, score, score_credito, score_rating, vis_recommended, classification_reasoning)
+- THEN the `leads` table exists with all canonical lead columns (tipo_documento, numero_documento, afiliado_colsubsidio, nombre_apellido, categoria, otra_caja_compensacion, estado_civil, edad, contrato_laboral, rango_salarial, total_ingresos_mensuales, gastos_mensuales, tiene_vivienda_propia, ahorros_o_cesantias, numero_pac, tiene_creditos_activos, subsidio_vivienda_anterior, lugar_eleccion_vivir, municipio_normalizado, tiempo_compra_deseado, interes_afiliacion, preferencia_vis, descripcion_vivienda_sueno, status, score, score_credito, score_rating, vis_recommended, classification_reasoning)
 - AND the old `LeadEntity` is no longer referenced by any code path
 
 #### Scenario: Enumerated columns store canonical slugs
 
-- GIVEN any of the columns `tipo_documento`, `estado_civil`, `contrato_laboral`, `rango_salarial`, `antiguedad_laboral`, `ahorros_o_cesantias`, `tiempo_compra_deseado`
+- GIVEN any of the columns `tipo_documento`, `estado_civil`, `contrato_laboral`, `rango_salarial`, `ahorros_o_cesantias`, `tiempo_compra_deseado`, `interes_afiliacion`, `preferencia_vis`
 - WHEN a value is persisted
 - THEN it is one of the canonical slugs defined by the `Source Domain Normalization` requirement in `lead-scoring`, or NULL
 - AND verbatim source labels MUST NOT be persisted in these columns
+
+#### Scenario: New v2 fields — gastos_mensuales, preferencia_vis, interes_afiliacion [ADDED — v2]
+
+- GIVEN a lead answers `¿En promedio cuanto suman los gastos mensuales de tu hogar?`
+- WHEN the answer is persisted
+- THEN `gastos_mensuales` stores it as `Numeric(14, 2)`, the same type as `total_ingresos_mensuales`
+- GIVEN a lead answers `¿Te interesan vivienda VIS, NO VIS o ambas?`
+- WHEN the answer is persisted
+- THEN `preferencia_vis` stores one of the canonical slugs `vis`, `no_vis`, `ambas`, or NULL
+- GIVEN a no-afiliado lead answers `¿Te gustaría iniciar tu proceso de afiliación a Colsubsidio?`
+- WHEN the answer is persisted
+- THEN `interes_afiliacion` stores one of the canonical slugs `afiliado_otra_caja`, `interesado_afiliarse`, `prefiere_otro_momento`, or NULL
+
+#### Scenario: Removed v1 fields have no home in the v2 schema [REMOVED — v2]
+
+- GIVEN the v2 sheet's capacity question, which no longer asks employment tenure, familial disability, or head-of-household status
+- WHEN the `leads` schema is created
+- THEN it MUST NOT contain `antiguedad_laboral`, `condicion_discapacidad_familiar` or `cabeza_de_hogar` columns
+- AND no code path other than `app/graph/**` / `app/prompts/**` (out of scope for this change, and inert once those columns are gone — see the apply report) reads or writes them
+
+#### Scenario: Household income is a single collapsed field [MODIFIED — v2]
+
+- GIVEN the v2 sheet asks `¿Cuanto suman los ingresos de tu hogar?` of every lead, regardless of `tiene_pareja`
+- WHEN the schema is created
+- THEN the `leads` table has a single `total_ingresos_mensuales` column
+- AND it MUST NOT also contain `total_ingresos_familiares_mensuales` (dropped; superseded by the single household-income column)
 
 #### Scenario: Unique afiliado by composite key
 
@@ -36,10 +70,16 @@ The system MUST replace the existing `LeadEntity` with the Colsubsidio lead sche
 
 #### Scenario: Lead status transitions
 
+> **v2 migration**: the terminal status vocabulary is renamed to match the
+> flow's three explicit terminal nodes — `ready` → `calificado`, `nurture` →
+> `nutrible`, and the sub-30 `nurture_social` band → `no_calificado`
+> (`docs/v2-impact-analysis.md` §7). The transition guard's behaviour is
+> unchanged.
+
 - GIVEN a `leads` row with `status='profiling'`
 - WHEN any agent operation modifies the row
-- THEN `status` MAY only transition to one of `{'ready', 'nurture', 'nurture_social'}`
-- AND transitions from a terminal status (`ready`, `nurture`, `nurture_social`) back to `profiling` or to each other MUST NOT occur
+- THEN `status` MAY only transition to one of `{'calificado', 'nutrible', 'no_calificado'}`
+- AND transitions from a terminal status (`calificado`, `nutrible`, `no_calificado`) back to `profiling` or to each other MUST NOT occur
 
 #### Scenario: Status transition guard is enforced in the repository
 
@@ -94,9 +134,24 @@ The system MUST replace the existing `LeadEntity` with the Colsubsidio lead sche
 - THEN the returned record exposes `categoria_afiliado` (A/B/C), a `score_credito` integer, `ha_recibido_subsidio` boolean, `fecha_nacimiento` (for edad derivation), `estado_civil`, `salario_base_cotizacion`, `categoria`, and an `is_seed` boolean
 - AND `is_seed=true` rows are reserved for the seed script's idempotent re-seed path
 
-#### Scenario: Caja de compensación is a controlled vocabulary
+#### Scenario: `otra_caja_compensacion` is a derived, nullable boolean [MODIFIED — v2]
 
-- GIVEN the source sheet enumerates 30+ named cajas de compensación (Cafam, Compensar, Colsubsidio, Comfacundi, Comfaboy, Comfama, …)
-- WHEN `otra_caja_compensacion` is persisted
-- THEN the value is one of the enumerated caja names, the literal `ninguna`, or NULL
-- AND free text outside that vocabulary MUST NOT be persisted, so the "already affiliated elsewhere" regulatory branch stays analyzable
+> **v2 migration** (`docs/v2-impact-analysis.md` §5): supersedes the v1 "Caja
+> de compensación is a controlled vocabulary" scenario. v2 replaces the
+> caja-name question with `interes_afiliacion`
+> (`¿Te gustaría iniciar tu proceso de afiliación a Colsubsidio?`, no-afiliado
+> path only) and deletes the 43-name caja vocabulary entirely. The v1
+> `CAJA_COMPENSACION` vocabulary is kept, unused, in `app/models/constants.py`
+> only because `app/graph/**` and `app/prompts/**` (out of scope for this
+> change) still import it for the v1 caja-selection flow; the graph-topology
+> migration that collapses that flow into `interes_afiliacion` MUST delete it.
+
+- GIVEN the sheet's `interes_afiliacion` question (verbatim: "No, estoy afiliado a otra caja de compensación" · "Si estoy interesado en afiliarme" · "No, prefiero en otro momento."), asked only on the no-afiliado path
+- WHEN the lead answers "No, estoy afiliado a otra caja de compensación"
+- THEN `otra_caja_compensacion` is persisted as `true`
+- WHEN the lead answers either other option
+- THEN `otra_caja_compensacion` is persisted as `false`
+- GIVEN an afiliado lead (the affiliation question is gated to non-affiliates)
+- WHEN the lead's row is persisted
+- THEN `interes_afiliacion` and `otra_caja_compensacion` both stay `NULL` — never asked, never derived
+- AND `NULL` ("never asked") and `false` ("asked, not affiliated elsewhere") MUST be kept distinct; they are not the same fact

@@ -73,8 +73,7 @@ def render_options(
       titles are truncated to 24 chars, but the full label always survives in
       the row `description` (<=72 chars), so nothing legible is lost even for
       the two `tipo_documento` labels over 24 chars ("Permiso especial de
-      permanencia", "Permiso por protección temporal") or the one `otra_caja`
-      name over 24 chars ("Comfamiliar Cartagena y Bolívar").
+      permanencia", "Permiso por protección temporal").
     - More than 100 options, or an empty option set -> `None`. The caller
       (`InboundMessageHandler`) degrades to plain text in both cases, and
       whenever the interactive send itself fails.
@@ -82,9 +81,8 @@ def render_options(
     Row/button `id`s are the canonical slug when `domain_normalizer.normalize`
     knows one for `field` (e.g. `4_8m`, `termino_fijo`), so a tap arrives at
     the existing deterministic parser with zero interpretation. Fields with no
-    slug table (`lugar_eleccion_vivir`, `otra_caja_compensacion`) fall back to
-    the verbatim label, which `validate_municipio` / `parse_caja_compensacion`
-    already accept as-is.
+    slug table (`lugar_eleccion_vivir`) fall back to the verbatim label, which
+    `validate_municipio` already accepts as-is.
     """
     cleaned = [o for o in options if o]
     if not cleaned:
@@ -104,17 +102,26 @@ def render_options(
     chunked = len(cleaned) > MAX_ROWS_PER_SECTION
     for index, start in enumerate(range(0, len(cleaned), MAX_ROWS_PER_SECTION), start=1):
         chunk = cleaned[start : start + MAX_ROWS_PER_SECTION]
-        rows = tuple(
-            {
-                "id": _option_id(field, o),
-                "title": _truncate(o, MAX_ROW_TITLE),
-                "description": _truncate(o, MAX_ROW_DESCRIPTION),
-            }
-            for o in chunk
-        )
+        rows = tuple(_row(field, o) for o in chunk)
         title = f"Opciones {index}" if chunked else "Opciones"
         sections.append({"title": _truncate(title, MAX_SECTION_TITLE), "rows": rows})
     return InteractiveList(button_text="Ver opciones", sections=tuple(sections))
+
+
+def _row(field: str, label: str) -> dict[str, str]:
+    """One list row: id, title, and a description **only when it adds something**.
+
+    WhatsApp renders the description on its own line under the title, so setting
+    both to the same text makes every option appear twice in the menu. The
+    description therefore carries the full label only when the title had to be
+    truncated to fit `MAX_ROW_TITLE` — which is the one case where the person
+    would otherwise not see the whole option.
+    """
+    title = _truncate(label, MAX_ROW_TITLE)
+    row = {"id": _option_id(field, label), "title": title}
+    if title != label:
+        row["description"] = _truncate(label, MAX_ROW_DESCRIPTION)
+    return row
 
 
 def _option_id(field: str, label: str) -> str:

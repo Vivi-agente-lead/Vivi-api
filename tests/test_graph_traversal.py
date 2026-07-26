@@ -8,12 +8,19 @@ inbound WhatsApp message.
 No LLM and no Postgres: `phrase` falls back to the deterministic question bank
 when `OPENAI_API_KEY` is empty, and `conftest.py` swaps the repositories for
 in-memory doubles.
+
+v2 migration (``docs/v2-impact-analysis.md``): the four capacity bundles
+collapse into `recoger_capacidad`; `antiguedad_laboral` and
+`condicion_discapacidad_familiar` are gone; the no-afiliado branch asks
+`edad` directly instead of `fecha_nacimiento`; `otra_caja_compensacion`
+(v1's caja-name prompt) is replaced by `recoger_interes_afiliacion`, gated to
+non-affiliates; and the terminal status vocabulary renames
+`ready`/`nurture`/`nurture_social` to `calificado`/`nutrible`/`no_calificado`.
 """
 
 from __future__ import annotations
 
 import uuid
-from datetime import date
 from decimal import Decimal
 from typing import Any
 
@@ -26,25 +33,23 @@ from tests.conftest import World, make_afiliado, make_proyecto, tool_config
 # Answers keyed by the field the graph is waiting for. `Conversation.run` replies
 # with the matching entry until the graph stops asking, so a test states the
 # lead's answers once and the traversal itself decides which ones are reached —
-# a bundle that wrongly asked for `antiguedad_laboral` would show up as a
-# KeyError naming the field, not as a silent pass.
-ANSWERS_AFILIADO_READY = {
+# a bundle that wrongly asked for a removed field would show up as a KeyError
+# naming the field, not as a silent pass.
+ANSWERS_AFILIADO_CALIFICADO = {
     "autorizacion_datos": "Sí",
     "tipo_documento": "Cédula de ciudadanía",
     "numero_documento": "1010101010",
     "estado_civil": "Casado",
     "contrato_laboral": "Termino indefinido",
-    "total_ingresos_familiares_mensuales": "9.000.000",
-    "antiguedad_laboral": "Mas de dos años",
+    "total_ingresos_mensuales": "9.000.000",
+    "gastos_mensuales": "2.000.000",
     "tiene_vivienda_propia": "No",
-    "ahorros_o_cesantias": "Más de $40 millones",
-    "tiene_creditos_activos": "No",
     "numero_pac": "2",
-    "condicion_discapacidad_familiar": "No",
     "subsidio_vivienda_anterior": "No",
+    "ahorros_o_cesantias": "Más de $40 millones",
     "lugar_eleccion_vivir": "Bogotá norte",
-    "tiempo_compra_deseado": "3 meses",
     "descripcion_vivienda_sueno": "Un apartamento con dos habitaciones y balcón.",
+    "tiempo_compra_deseado": "3 meses",
 }
 
 ANSWERS_NO_AFILIADO = {
@@ -52,22 +57,41 @@ ANSWERS_NO_AFILIADO = {
     "tipo_documento": "Cédula de ciudadanía",
     "numero_documento": "1234567890",
     "nombre_apellido": "Camilo Restrepo",
-    "fecha_nacimiento": "12/03/1990",
+    "edad": "36",
+    "interes_afiliacion": "Si estoy interesado en afiliarme",
     "estado_civil": "Soltero",
-    "otra_caja_compensacion": "Compensar",
     "contrato_laboral": "Termino indefinido",
     "total_ingresos_mensuales": "5.000.000",
-    "antiguedad_laboral": "Mas de dos años",
-    "rango_salarial": "4 a 8 millones",
+    "gastos_mensuales": "3.000.000",
     "tiene_vivienda_propia": "No",
-    "ahorros_o_cesantias": "Entre $3 y $10 millones",
-    "tiene_creditos_activos": "No",
     "numero_pac": "0",
-    "condicion_discapacidad_familiar": "No",
     "subsidio_vivienda_anterior": "No",
+    "ahorros_o_cesantias": "Entre $3 y $10 millones",
     "lugar_eleccion_vivir": "Soacha",
-    "tiempo_compra_deseado": "6 meses",
     "descripcion_vivienda_sueno": "Una casa pequeña con patio.",
+    "tiempo_compra_deseado": "6 meses",
+}
+
+# Chosen so `simulate_bureau_cedula` bands Malo (0 pts) and the subsidio-previo
+# override lands well below `NURTURE_FLOOR` (30) — the third terminal.
+ANSWERS_NO_CALIFICADO = {
+    "autorizacion_datos": "Sí",
+    "tipo_documento": "Cédula de ciudadanía",
+    "numero_documento": "5555555555",
+    "nombre_apellido": "Laura Gómez",
+    "edad": "40",
+    "interes_afiliacion": "No, prefiero en otro momento.",
+    "estado_civil": "Soltero",
+    "contrato_laboral": "Prestacion de servicios",
+    "total_ingresos_mensuales": "1.000.000",
+    "gastos_mensuales": "900.000",
+    "tiene_vivienda_propia": "No",
+    "numero_pac": "0",
+    "subsidio_vivienda_anterior": "Sí",
+    "ahorros_o_cesantias": "No tengo ahorros.",
+    "lugar_eleccion_vivir": "Ubaté",
+    "descripcion_vivienda_sueno": "Algo sencillo y tranquilo.",
+    "tiempo_compra_deseado": "No sé",
 }
 
 
@@ -229,15 +253,14 @@ async def test_an_answer_outside_the_domain_is_re_asked_and_recorded(
     )
 
 
-
-# ── Full traversals (task 4.11) ─────────────────────────────────────────────
-async def test_afiliado_happy_path_reaches_ready_and_sees_projects(
+# ── Full traversals — the three terminals ───────────────────────────────────
+async def test_afiliado_happy_path_reaches_calificado_and_sees_projects(
     graph_world: World,
 ) -> None:
-    """Spec: *Happy path afiliado reaches READY*.
+    """Spec: *Happy path afiliado reaches Calificado*.
 
-    `status='ready'`, `score >= 60`, `get_projects` invoked, and the closing
-    message routes to a human asesor.
+    `status='calificado'`, `score >= 60`, `get_projects` invoked, and the
+    closing message routes to a human asesor.
     """
     graph_world.afiliados.append(
         make_afiliado(
@@ -251,27 +274,26 @@ async def test_afiliado_happy_path_reaches_ready_and_sees_projects(
     graph_world.proyectos.append(make_proyecto("VIBO ONCE", "B1", "Bogota", "VIS"))
 
     chat = Conversation()
-    closing = await chat.run(ANSWERS_AFILIADO_READY)
+    closing = await chat.run(ANSWERS_AFILIADO_CALIFICADO)
 
-    assert chat.profile["status"] == "ready"
+    assert chat.profile["status"] == "calificado"
     assert chat.profile["score"] >= 60
     assert "asesor" in closing.lower()
     assert "VIBO ONCE" in closing
 
     lead = graph_world.lead(chat.conversation_id)
-    assert lead.status == "ready"
+    assert lead.status == "calificado"
     assert lead.score == chat.profile["score"]
     assert lead.municipio_normalizado == "Bogota"
     assert lead.lugar_eleccion_vivir == "Bogotá norte"
-    assert lead.cabeza_de_hogar is True
     assert graph_world.project_queries, "get_projects was never called"
 
 
-async def test_afiliado_is_never_asked_identidad_otra_caja_or_rango_salarial(
+async def test_afiliado_is_never_asked_identidad_interes_afiliacion_or_rango_salarial(
     graph_world: World,
 ) -> None:
-    """Spec: *Afiliado branch skips identidad, otra_caja, edad* and
-    *Rango salarial is asked only where the source permits*."""
+    """Spec: *Afiliado branch skips identidad, interes_afiliacion, edad* and
+    *rango_salarial is always derived, never asked*."""
     graph_world.afiliados.append(
         make_afiliado(
             numero_documento="1010101010",
@@ -280,24 +302,25 @@ async def test_afiliado_is_never_asked_identidad_otra_caja_or_rango_salarial(
         )
     )
     chat = Conversation()
-    await chat.run(ANSWERS_AFILIADO_READY)
+    await chat.run(ANSWERS_AFILIADO_CALIFICADO)
 
     for field in (
         "nombre_apellido",
-        "fecha_nacimiento",
         "edad",
-        "otra_caja_compensacion",
+        "interes_afiliacion",
         "rango_salarial",
     ):
         assert field not in chat.asked_fields, f"the graph asked an afiliado for {field}"
     assert chat.profile["rango_salarial"] == "4_8m"  # derived from the record
     assert graph_world.lead(chat.conversation_id).otra_caja_compensacion is None
+    assert graph_world.lead(chat.conversation_id).interes_afiliacion is None
 
 
-async def test_no_afiliado_gets_the_seventy_five_threshold_and_lands_on_nurture(
+async def test_no_afiliado_gets_the_seventy_five_threshold_and_lands_on_nutrible(
     graph_world: World,
 ) -> None:
-    """Spec: *Happy path no-afiliado* — READY needs 75 for a no-afiliado, not 60.
+    """Spec: *Happy path no-afiliado* — Calificado needs 75 for a no-afiliado,
+    not 60.
 
     The assertion is the **threshold that was applied**, not a hard-coded score.
     A no-afiliado's credit band comes from `simulate_bureau_cedula`, which lives
@@ -315,25 +338,47 @@ async def test_no_afiliado_gets_the_seventy_five_threshold_and_lands_on_nurture(
         in chat.profile["classification_reasoning"]
     )
     assert 30 <= chat.profile["score"] < 75
-    assert chat.profile["status"] == "nurture"
+    assert chat.profile["status"] == "nutrible"
 
     lead = graph_world.lead(chat.conversation_id)
-    assert lead.status == "nurture"
+    assert lead.status == "nutrible"
     assert lead.categoria is None
     assert lead.afiliado_colsubsidio is False
 
 
-async def test_no_afiliado_is_asked_identidad_otra_caja_and_rango_salarial(
+async def test_no_afiliado_is_asked_identidad_and_interes_afiliacion_never_rango(
     graph_world: World,
 ) -> None:
-    """The source condition "solo si es empleado y NO es afiliado"."""
+    """The affiliation question is gated to non-affiliates; rango_salarial is
+    always derived, never asked directly, on either branch."""
     chat = Conversation()
     await chat.run(ANSWERS_NO_AFILIADO)
 
-    for field in ("nombre_apellido", "fecha_nacimiento", "otra_caja_compensacion",
-                  "rango_salarial", "total_ingresos_mensuales"):
+    for field in ("nombre_apellido", "edad", "interes_afiliacion", "total_ingresos_mensuales"):
         assert field in chat.asked_fields, f"a no-afiliado was not asked for {field}"
-    assert "total_ingresos_familiares_mensuales" not in chat.asked_fields
+    assert "rango_salarial" not in chat.asked_fields
+    assert chat.profile["rango_salarial"] == "4_8m"  # derived from total_ingresos_mensuales
+    lead = graph_world.lead(chat.conversation_id)
+    assert lead.interes_afiliacion == "interesado_afiliarse"
+    assert lead.otra_caja_compensacion is False
+
+
+async def test_no_afiliado_reaches_no_calificado(graph_world: World) -> None:
+    """The third terminal: `Calificar lead` → `No calificado`.
+
+    The subsidio-previo override forces `no_calificado` when the raw score is
+    below `NURTURE_FLOOR`, and no follow-up is drawn.
+    """
+    chat = Conversation()
+    closing = await chat.run(ANSWERS_NO_CALIFICADO)
+
+    assert chat.profile["status"] == "no_calificado"
+    assert chat.profile["score"] < 30
+    assert (
+        "Subsidio de vivienda previo otorgado — no califica para nuevo subsidio"
+        in chat.profile["classification_reasoning"]
+    )
+    assert "VIBO" not in closing
 
 
 @pytest.mark.parametrize("edad", [17, 1])
@@ -349,7 +394,7 @@ async def test_afiliado_under_eighteen_terminates_at_the_afiliado_side_gate(
         make_afiliado(numero_documento="1010101010", edad=edad)
     )
     chat = Conversation()
-    farewell = await chat.run(ANSWERS_AFILIADO_READY)
+    farewell = await chat.run(ANSWERS_AFILIADO_CALIFICADO)
 
     assert chat.profile["edad"] == edad
     assert "mayores de edad" in farewell
@@ -360,9 +405,9 @@ async def test_afiliado_under_eighteen_terminates_at_the_afiliado_side_gate(
 async def test_no_afiliado_under_eighteen_terminates_at_the_identity_gate(
     graph_world: World,
 ) -> None:
-    """Spec: *Menor de edad … no-afiliado path*. `edad` is computed server-side."""
+    """Spec: *Menor de edad … no-afiliado path*. v2 asks `edad` directly."""
     minor = dict(ANSWERS_NO_AFILIADO)
-    minor["fecha_nacimiento"] = f"01/01/{date.today().year - 15}"
+    minor["edad"] = "15"
 
     chat = Conversation()
     farewell = await chat.run(minor)
@@ -373,15 +418,12 @@ async def test_no_afiliado_under_eighteen_terminates_at_the_identity_gate(
     assert graph_world.lead(chat.conversation_id).status == "profiling"
 
 
-async def test_subsidio_previo_forces_nurture_for_a_soltero_lead(
+async def test_subsidio_previo_forces_nutrible_regardless_of_estado_civil(
     graph_world: World,
 ) -> None:
-    """Spec: *Subsidio previo forces nurture* and *… is collected on every path*.
-
-    A `soltero` afiliado reaches the `sin_pareja` bundle, is asked the question,
-    and the absolute override fires — the regression the previous topology had,
-    where the field was gated to casado/union_libre and never collected here.
-    """
+    """Spec: *Subsidio previo forces nutrible* and *… is collected on every
+    path* — the household capacity block asks every lead, soltero included,
+    now that the four bundles collapsed into one."""
     graph_world.afiliados.append(
         make_afiliado(
             numero_documento="1010101010",
@@ -391,93 +433,87 @@ async def test_subsidio_previo_forces_nurture_for_a_soltero_lead(
             salario_base_cotizacion=Decimal("9000000"),
         )
     )
-    answers = dict(ANSWERS_AFILIADO_READY)
+    answers = dict(ANSWERS_AFILIADO_CALIFICADO)
     answers["estado_civil"] = "Soltero"
-    answers["total_ingresos_mensuales"] = "6.000.000"
     answers["subsidio_vivienda_anterior"] = "Sí"
 
     chat = Conversation()
     await chat.run(answers)
 
-    assert chat.profile["tiene_pareja"] is False
     assert chat.profile["subsidio_vivienda_anterior"] is True
     assert "subsidio_vivienda_anterior" in chat.asked_fields
-    assert chat.profile["status"] == "nurture"
+    assert chat.profile["status"] == "nutrible"
     assert (
         "Subsidio de vivienda previo otorgado — no califica para nuevo subsidio"
         in chat.profile["classification_reasoning"]
     )
 
 
-async def test_pac_and_discapacidad_are_collected_on_a_soltero_afiliado_path(
+async def test_pac_bonus_is_collected_regardless_of_estado_civil(
     graph_world: World,
 ) -> None:
-    """Spec: *PAC and discapacidad are collected on every path* — the `+8` bonus."""
+    """Spec: *PAC is collected on every path* — the `+8` bonus."""
     graph_world.afiliados.append(
         make_afiliado(numero_documento="1010101010", edad=34)
     )
-    answers = dict(ANSWERS_AFILIADO_READY)
+    answers = dict(ANSWERS_AFILIADO_CALIFICADO)
     answers["estado_civil"] = "Soltero"
-    answers["total_ingresos_mensuales"] = "6.000.000"
-    answers["condicion_discapacidad_familiar"] = "Sí"
 
     chat = Conversation()
     await chat.run(answers)
 
     assert "numero_pac" in chat.asked_fields
-    assert "condicion_discapacidad_familiar" in chat.asked_fields
     assert chat.profile["numero_pac"] == 2
-    assert chat.profile["condicion_discapacidad_familiar"] is True
-    assert chat.profile["cabeza_de_hogar"] is True
+    assert "+8" in chat.profile["classification_reasoning"]
 
 
-async def test_independiente_is_never_asked_antiguedad(graph_world: World) -> None:
-    """Spec: *Empleado vs independiente antiguedad*."""
-    graph_world.afiliados.append(
-        make_afiliado(numero_documento="1010101010", edad=34)
-    )
-    answers = dict(ANSWERS_AFILIADO_READY)
-    answers["contrato_laboral"] = "Prestacion de servicios"
-
-    chat = Conversation()
-    await chat.run(answers)
-
-    assert chat.profile["contrato_laboral"] == "prestacion_servicios"
-    assert chat.profile["es_empleado"] is False
-    assert "antiguedad_laboral" not in chat.asked_fields
-    assert chat.nodes.count("cap_ind_con_pareja") > 0
-
-
-@pytest.mark.parametrize("estado_civil", ["Divorciado", "Separado", "Viudo"])
-async def test_partnerless_states_reach_the_sin_pareja_bundle(
-    graph_world: World, estado_civil: str
-) -> None:
-    """Spec: *Pareja vs sin-pareja income fields* for the three non-soltero states."""
-    graph_world.afiliados.append(
-        make_afiliado(numero_documento="1010101010", edad=34)
-    )
-    answers = dict(ANSWERS_AFILIADO_READY)
-    answers["estado_civil"] = estado_civil
-    answers["total_ingresos_mensuales"] = "6.000.000"
-
-    chat = Conversation()
-    await chat.run(answers)
-
-    assert chat.profile["tiene_pareja"] is False
-    assert "total_ingresos_mensuales" in chat.asked_fields
-    assert "total_ingresos_familiares_mensuales" not in chat.asked_fields
-    assert chat.nodes.count("cap_emp_sin_pareja") > 0
-
-
-async def test_a_ready_lead_gets_the_catalogue_and_a_nurture_lead_does_not(
+async def test_contrato_laboral_supports_the_new_independiente_slug(
     graph_world: World,
 ) -> None:
-    """`get_projects` runs only for `status=='ready'` — no commercial noise."""
+    """Spec: v2 column O splits `Independiente` from `Prestacion de servicios`."""
+    graph_world.afiliados.append(
+        make_afiliado(numero_documento="1010101010", edad=34)
+    )
+    answers = dict(ANSWERS_AFILIADO_CALIFICADO)
+    answers["contrato_laboral"] = "Independiente"
+
+    chat = Conversation()
+    await chat.run(answers)
+
+    assert chat.profile["contrato_laboral"] == "independiente"
+    assert chat.profile["es_empleado"] is False
+    assert "antiguedad_laboral" not in chat.asked_fields
+
+
+@pytest.mark.parametrize("estado_civil", ["Divorciado", "Union libre"])
+async def test_every_estado_civil_reaches_the_same_household_capacity_node(
+    graph_world: World, estado_civil: str
+) -> None:
+    """The four v1 bundles collapse into one: every estado_civil converges on
+    `recoger_capacidad` and asks the single `total_ingresos_mensuales` field —
+    there is no more familiar-income variant to switch on."""
+    graph_world.afiliados.append(
+        make_afiliado(numero_documento="1010101010", edad=34)
+    )
+    answers = dict(ANSWERS_AFILIADO_CALIFICADO)
+    answers["estado_civil"] = estado_civil
+
+    chat = Conversation()
+    await chat.run(answers)
+
+    assert "total_ingresos_mensuales" in chat.asked_fields
+    assert chat.nodes.count("recoger_capacidad") > 0
+
+
+async def test_a_calificado_lead_gets_the_catalogue_and_a_nutrible_lead_does_not(
+    graph_world: World,
+) -> None:
+    """`get_projects` runs only for `status=='calificado'` — no commercial noise."""
     graph_world.proyectos.append(make_proyecto("VIBO ONCE", "B1", "Soacha", "VIS"))
     chat = Conversation()
     closing = await chat.run(ANSWERS_NO_AFILIADO)
 
-    assert chat.profile["status"] == "nurture"
+    assert chat.profile["status"] == "nutrible"
     assert "VIBO ONCE" not in closing
     assert "más adelante" in closing
 

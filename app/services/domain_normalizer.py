@@ -13,6 +13,13 @@ Hard rule (audit): matching is EXACT after case-folding, accent-stripping and
 whitespace-collapsing. Never substring-matches — the previous revision's
 `"no" not in ahorro` test scored `Menos de $3 millones` as 0 because `"menos"`
 contains `"no"`.
+
+v2 migration (``docs/v2-impact-analysis.md``): ``tipo_documento`` gains
+`Carné Diplomático`, ``contrato_laboral`` gains `Independiente` as its own
+slug (separate from `Prestacion de servicios` — column O of the v2 sheet),
+``antiguedad_laboral`` is removed (the field it backed no longer exists), and
+two verbatim tables are added for the new ``interes_afiliacion`` and
+``preferencia_vis`` fields.
 """
 
 from __future__ import annotations
@@ -32,6 +39,7 @@ TIPO_DOCUMENTO: Final[dict[str, str]] = {
     "pasaporte": "PA",
     "permiso especial de permanencia": "PEP",
     "permiso por protección temporal": "PPT",
+    "carné diplomático": "CD",  # v2 sheet row B8 — new sixth document type
 }
 
 ESTADO_CIVIL: Final[dict[str, str]] = {
@@ -47,6 +55,11 @@ CONTRATO_LABORAL: Final[dict[str, str]] = {
     "termino fijo": "termino_fijo",
     "termino indefinido": "termino_indefinido",
     "prestacion de servicios": "prestacion_servicios",
+    # v2 sheet column O: `Independiente` is its own option, separate from
+    # `Contrato de prestación de servicios`. Column P (the old 3-value list)
+    # disagrees and keeps `prestacion_servicios` doubling as independiente;
+    # column O is followed here — see docs/v2-impact-analysis.md §4.
+    "independiente": "independiente",
 }
 
 RANGO_SALARIAL: Final[dict[str, str]] = {
@@ -55,12 +68,6 @@ RANGO_SALARIAL: Final[dict[str, str]] = {
     "4 a 8 millones": "4_8m",
     "8 a 10 millones": "8_10m",
     "mas de 10 millones": "mas_10m",
-}
-
-ANTIGUEDAD_LABORAL: Final[dict[str, str]] = {
-    "menos de 1 año": "menos_1a",
-    "1 a 2 años": "1_2a",
-    "mas de dos años": "mas_2a",
 }
 
 AHORROS_O_CESANTIAS: Final[dict[str, str]] = {
@@ -78,6 +85,22 @@ TIEMPO_COMPRA_DESEADO: Final[dict[str, str]] = {
     "1 año": "1_ano",
     "2 años": "2_anos",
     "no sé": "no_se",
+}
+
+# v2: `¿Te gustaría iniciar tu proceso de afiliación a Colsubsidio?` — gated
+# to the no-afiliado path (docs/v2-impact-analysis.md §5). Verbatim from sheet
+# column I.
+INTERES_AFILIACION: Final[dict[str, str]] = {
+    "no, estoy afiliado a otra caja de compensación": "afiliado_otra_caja",
+    "si estoy interesado en afiliarme": "interesado_afiliarse",
+    "no, prefiero en otro momento.": "prefiere_otro_momento",
+}
+
+# v2: `¿Te interesan vivienda VIS, NO VIS o ambas?` (project-browsing loop).
+PREFERENCIA_VIS: Final[dict[str, str]] = {
+    "vis": "vis",
+    "no vis": "no_vis",
+    "ambas": "ambas",
 }
 
 # ── Boolean domain ─────────────────────────────────────────────────────────
@@ -101,14 +124,20 @@ BOOLEAN: Final[dict[str, bool]] = {
 # Boolean `leads` columns. Registered here so `normalize(field, raw)` routes
 # them through the boolean domain instead of returning None for an unknown
 # field, and so every collection boundary has a single list to iterate.
+#
+# `otra_caja_compensacion` is intentionally NOT listed here even though it is
+# now a `Boolean` column: it is never normalized from raw yes/no input, it is
+# derived from `interes_afiliacion` (see `app.models.constants.
+# OTRA_CAJA_COMPENSACION_TRIGGER`).
+#
+# v2 removes `condicion_discapacidad_familiar` and `cabeza_de_hogar` (fields
+# no longer collected).
 BOOLEAN_FIELDS: Final[frozenset[str]] = frozenset(
     {
         "subsidio_vivienda_anterior",
         "tiene_vivienda_propia",
         "tiene_creditos_activos",
-        "condicion_discapacidad_familiar",
         "afiliado_colsubsidio",
-        "cabeza_de_hogar",
     }
 )
 
@@ -119,9 +148,10 @@ _TABLES: Final[dict[str, dict[str, str]]] = {
     "estado_civil": ESTADO_CIVIL,
     "contrato_laboral": CONTRATO_LABORAL,
     "rango_salarial": RANGO_SALARIAL,
-    "antiguedad_laboral": ANTIGUEDAD_LABORAL,
     "ahorros_o_cesantias": AHORROS_O_CESANTIAS,
     "tiempo_compra_deseado": TIEMPO_COMPRA_DESEADO,
+    "interes_afiliacion": INTERES_AFILIACION,
+    "preferencia_vis": PREFERENCIA_VIS,
 }
 
 # ── Municipio normalization ────────────────────────────────────────────────
@@ -218,10 +248,10 @@ def normalize(field: str, raw: object) -> str | bool | None:
     """Exact, case- and accent-insensitive lookup of an enumerated lead field.
 
     Args:
-        field: one of the seven enumerated lead-field names
-            (tipo_documento, estado_civil, contrato_laboral, rango_salarial,
-            antiguedad_laboral, ahorros_o_cesantias, tiempo_compra_deseado)
-            or one of :data:`BOOLEAN_FIELDS`.
+        field: one of the enumerated lead-field names (tipo_documento,
+            estado_civil, contrato_laboral, rango_salarial,
+            ahorros_o_cesantias, tiempo_compra_deseado, interes_afiliacion,
+            preferencia_vis) or one of :data:`BOOLEAN_FIELDS`.
         raw: the verbatim source label OR an already-canonical slug (for a
             boolean field, the workbook `SI`/`NO` literal or a real bool).
 

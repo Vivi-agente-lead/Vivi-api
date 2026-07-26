@@ -21,16 +21,13 @@ REQUIRED_SLICES = (
     "pedir_cedula",
     "recoger_identidad",
     "recoger_estado_civil",
-    "recoger_otra_caja",
+    "recoger_interes_afiliacion",
     "recoger_empleo",
-    "cap_emp_con_pareja",
-    "cap_emp_sin_pareja",
-    "cap_ind_con_pareja",
-    "cap_ind_sin_pareja",
+    "recoger_capacidad",
     "recoger_intencion",
-    "handoff_ready",
-    "handoff_nurture",
-    "handoff_nurture_social",
+    "handoff_calificado",
+    "handoff_nutrible",
+    "handoff_no_calificado",
     "farewell_underage",
     "farewell_optout",
 )
@@ -89,34 +86,23 @@ def test_every_slice_declares_an_objective_and_a_style() -> None:
         assert "## Estilo" in text, f"{node} has no Estilo section"
 
 
-def test_capacity_slices_all_collect_the_absolute_disqualifier() -> None:
-    """`subsidio_vivienda_anterior` is collected on all four capacity paths."""
-    for node in (
-        "cap_emp_con_pareja",
-        "cap_emp_sin_pareja",
-        "cap_ind_con_pareja",
-        "cap_ind_sin_pareja",
-    ):
-        text = SLICES[node]
-        assert "subsidio_vivienda_anterior" in text, node
-        assert "numero_pac" in text, node
-        assert "condicion_discapacidad_familiar" in text, node
+def test_capacidad_slice_collects_the_absolute_disqualifier() -> None:
+    """`subsidio_vivienda_anterior` and `numero_pac` are collected of every lead —
+    the single household block every branch now converges on."""
+    text = SLICES["recoger_capacidad"]
+    assert "subsidio_vivienda_anterior" in text
+    assert "numero_pac" in text
+    assert "total_ingresos_mensuales" in text
+    assert "gastos_mensuales" in text
 
 
-def test_capacity_slices_split_the_income_field_by_partner() -> None:
-    for node in ("cap_emp_con_pareja", "cap_ind_con_pareja"):
-        assert "total_ingresos_familiares_mensuales" in SLICES[node]
-    for node in ("cap_emp_sin_pareja", "cap_ind_sin_pareja"):
-        assert "total_ingresos_mensuales" in SLICES[node]
-        assert "total_ingresos_familiares_mensuales" not in SLICES[node].replace(
-            "No preguntes ingresos familiares", ""
-        )
-
-
-def test_independiente_slices_do_not_ask_for_antiguedad_or_rango_salarial() -> None:
-    for node in ("cap_ind_con_pareja", "cap_ind_sin_pareja"):
-        text = SLICES[node]
-        assert "No preguntes antigüedad laboral ni rango salarial" in text
+def test_capacidad_slice_does_not_mention_removed_fields() -> None:
+    """v2 drops `antiguedad_laboral`, `condicion_discapacidad_familiar` and
+    `cabeza_de_hogar` outright — no lingering mention in the one remaining
+    capacity slice."""
+    text = SLICES["recoger_capacidad"]
+    assert "condicion_discapacidad_familiar" not in text
+    assert "cabeza_de_hogar" not in text
 
 
 def test_render_system_prompt_composes_preamble_slice_and_profile() -> None:

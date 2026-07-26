@@ -23,9 +23,9 @@ from app.models.repositories.base_repository import BaseRepository
 class LeadStatusTransitionError(Exception):
     """Raised when an upsert tries to change a terminal lead status.
 
-    A terminal status (`ready`/`nurture`/`nurture_social`) may not transition
-    back to `profiling` or to another terminal status. The numeric score is
-    still computed/reported; only the status column is locked.
+    A terminal status (`calificado`/`nutrible`/`no_calificado`) may not
+    transition back to `profiling` or to another terminal status. The numeric
+    score is still computed/reported; only the status column is locked.
     """
 
     def __init__(self, conversation_id: uuid.UUID, current: str, attempted: str) -> None:
@@ -75,8 +75,8 @@ class LeadRepository(BaseRepository[LeadColsubsidioEntity]):
             the existing row's values. A key whose value is ``None`` sets the
             column to NULL (callers normalize unrecognized values to None).
           * ``status`` is handled with the terminal-status guard: a row already
-            at a terminal status (`ready`/`nurture`/`nurture_social`) may not
-            change. An out-of-domain status raises ValueError.
+            at a terminal status (`calificado`/`nutrible`/`no_calificado`) may
+            not change. An out-of-domain status raises ValueError.
           * ``normalization_notes`` is merged (existing list extended with new
             notes, order preserved, duplicates dropped) rather than replaced.
           * ``conversation_id`` / ``id`` / timestamps are ignored if present.

@@ -23,18 +23,12 @@ from langgraph.graph import END, START, StateGraph
 
 from app.core.config import settings
 from app.core.exceptions import ServiceUnavailableError
-from app.graph.nodes.capacity import (
-    cap_emp_con_pareja,
-    cap_emp_sin_pareja,
-    cap_ind_con_pareja,
-    cap_ind_sin_pareja,
-    recoger_empleo,
-)
+from app.graph.nodes.capacity import recoger_capacidad, recoger_empleo
 from app.graph.nodes.closing import handoff, recoger_intencion, scoring
 from app.graph.nodes.collect import (
     recoger_estado_civil,
     recoger_identidad,
-    recoger_otra_caja,
+    recoger_interes_afiliacion,
 )
 from app.graph.nodes.spine import (
     afiliado_check,
@@ -42,13 +36,7 @@ from app.graph.nodes.spine import (
     pedir_cedula,
     start,
 )
-from app.graph.router import (
-    _route_afiliado,
-    _route_autorizacion,
-    _route_capacity,
-    _route_edad,
-    _route_otra_caja,
-)
+from app.graph.router import _route_afiliado, _route_autorizacion, _route_edad
 from app.graph.state import AgentState
 from app.graph.turn_gate import turn_gated
 from app.services.checkpointer_factory import build_checkpointer
@@ -61,25 +49,20 @@ logger = logging.getLogger(__name__)
 # Single hackathon role. More roles can be added later without code changes.
 DEFAULT_ROLE = "agent"
 
-# The 15 nodes of `design.md` §3, in flow order. `recoger_subsidio_pareja` and
-# `recoger_otra_caja_y_pac` of the previous design revision are collapsed into a
-# single `recoger_otra_caja`: their only remaining exclusive field is
-# `otra_caja_compensacion`, because `subsidio_vivienda_anterior`, `numero_pac`
-# and `condicion_discapacidad_familiar` moved into the capacity bundles, where
-# every branch reaches them.
+# The v2 linear topology (`docs/v2-impact-analysis.md`; Block A of the
+# graph-topology migration). The four v1 capacity bundles and
+# `recoger_otra_caja` collapse into `recoger_capacidad` and
+# `recoger_interes_afiliacion` respectively — see those modules' docstrings.
 NODES: dict[str, Any] = {
     "start": start,
     "autorizacion_datos": autorizacion_datos,
     "pedir_cedula": pedir_cedula,
     "afiliado_check": afiliado_check,
     "recoger_identidad": recoger_identidad,
+    "recoger_interes_afiliacion": recoger_interes_afiliacion,
     "recoger_estado_civil": recoger_estado_civil,
-    "recoger_otra_caja": recoger_otra_caja,
     "recoger_empleo": recoger_empleo,
-    "cap_emp_con_pareja": cap_emp_con_pareja,
-    "cap_emp_sin_pareja": cap_emp_sin_pareja,
-    "cap_ind_con_pareja": cap_ind_con_pareja,
-    "cap_ind_sin_pareja": cap_ind_sin_pareja,
+    "recoger_capacidad": recoger_capacidad,
     "recoger_intencion": recoger_intencion,
     "scoring": scoring,
     "handoff": handoff,
@@ -87,7 +70,7 @@ NODES: dict[str, Any] = {
 
 
 def build_lead_profiler() -> StateGraph:
-    """Assemble the Colsubsidio lead-profiling topology (`design.md` §3).
+    """Assemble the Colsubsidio lead-profiling topology.
 
     Returns the uncompiled graph so tests can compile it with their own
     checkpointer.
@@ -102,17 +85,17 @@ def build_lead_profiler() -> StateGraph:
     graph.add_conditional_edges("autorizacion_datos", turn_gated(_route_autorizacion))
     graph.add_conditional_edges("pedir_cedula", turn_gated("afiliado_check"))
     graph.add_conditional_edges("afiliado_check", turn_gated(_route_afiliado))
+    # No-afiliado only: `_route_edad` routes an adult straight to
+    # `recoger_interes_afiliacion`, a node only this branch ever reaches — the
+    # affiliation question is gated to non-affiliates by topology, not by a
+    # separate predicate.
     graph.add_conditional_edges("recoger_identidad", turn_gated(_route_edad))
-    graph.add_conditional_edges("recoger_estado_civil", turn_gated(_route_otra_caja))
-    graph.add_conditional_edges("recoger_otra_caja", turn_gated("recoger_empleo"))
-    graph.add_conditional_edges("recoger_empleo", turn_gated(_route_capacity))
-    for bundle in (
-        "cap_emp_con_pareja",
-        "cap_emp_sin_pareja",
-        "cap_ind_con_pareja",
-        "cap_ind_sin_pareja",
-    ):
-        graph.add_conditional_edges(bundle, turn_gated("recoger_intencion"))
+    graph.add_conditional_edges(
+        "recoger_interes_afiliacion", turn_gated("recoger_estado_civil")
+    )
+    graph.add_conditional_edges("recoger_estado_civil", turn_gated("recoger_empleo"))
+    graph.add_conditional_edges("recoger_empleo", turn_gated("recoger_capacidad"))
+    graph.add_conditional_edges("recoger_capacidad", turn_gated("recoger_intencion"))
     graph.add_conditional_edges("recoger_intencion", turn_gated("scoring"))
     graph.add_edge("scoring", "handoff")
     graph.add_edge("handoff", END)
