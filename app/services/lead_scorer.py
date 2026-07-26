@@ -25,6 +25,7 @@ The persisted ``lead.status`` MUST carry the same value as the returned
 
 from __future__ import annotations
 
+import math
 from typing import Any, Mapping, TypedDict
 
 from app.services.credit_bands import band_from_score_credito, simulate_bureau_cedula
@@ -118,6 +119,41 @@ def _get(profile: Mapping[str, Any] | None, key: str, default: Any = None) -> An
     return profile.get(key, default)
 
 
+def _as_int(value: Any) -> int | None:
+    """Best-effort integer coercion; an uncoercible value behaves as absent.
+
+    LLM-supplied numerics plausibly arrive as strings (``"2"``, ``"2.0"``), and
+    the scorer must stay a total function of its inputs — comparing ``"2" > 0``
+    raised ``TypeError``. ``bool`` is deliberately rejected: a flag is not a
+    count.
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value) if math.isfinite(value) else None
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    try:
+        return int(text)
+    except ValueError:
+        pass
+    try:
+        as_float = float(text)
+    except ValueError:
+        return None
+    return int(as_float) if math.isfinite(as_float) else None
+
+
+def _int_field(profile: Mapping[str, Any] | None, key: str) -> int | None:
+    """Read a numeric lead field, coerced. Uncoercible → ``None`` (absent)."""
+    return _as_int(_get(profile, key))
+
+
 def _flag(profile: Mapping[str, Any] | None, key: str) -> bool | None:
     """Read a boolean lead field through the domain normalizer.
 
@@ -157,7 +193,7 @@ def score_lead(
     # "Malo" — falling through to the simulation would fabricate a credit band
     # out of their own document number (spec Bucket 1).
     if afiliado:
-        score_credito = afiliado.get("score_credito")
+        score_credito = _as_int(afiliado.get("score_credito"))
         credit_pts, rating_label = band_from_score_credito(score_credito)
     else:
         score_credito = simulate_bureau_cedula(_get(lead, "numero_documento", ""))
@@ -209,7 +245,7 @@ def score_lead(
         red -= 5
     if (
         _flag(lead, "condicion_discapacidad_familiar") is True
-        or (_get(lead, "numero_pac") or 0) > 0
+        or (_int_field(lead, "numero_pac") or 0) > 0
     ):
         red += 8
     # USER-LOCKED: subsidio_vivienda_anterior never subtracts from the score —
@@ -323,13 +359,13 @@ def build_scoring_result(
         red -= 5
     if (
         _flag(lead, "condicion_discapacidad_familiar") is True
-        or (_get(lead, "numero_pac") or 0) > 0
+        or (_int_field(lead, "numero_pac") or 0) > 0
     ):
         red += 8
 
     breakdown: dict[str, int] = {
         "credito": band_from_score_credito(
-            afiliado.get("score_credito")
+            _as_int(afiliado.get("score_credito"))
             if afiliado
             else simulate_bureau_cedula(_get(lead, "numero_documento", ""))
         )[0],

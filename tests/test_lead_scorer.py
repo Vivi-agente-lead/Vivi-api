@@ -542,6 +542,44 @@ def test_regression_d2_afiliado_without_score_credito_is_malo() -> None:
     assert score_lead(lead, explicit_null) == score_lead(lead, afiliado)
 
 
+# ── D4 regression: the scorer is a total function of its inputs ─────────────
+# `numero_pac="2"` raised `TypeError: '>' not supported between instances of
+# 'str' and 'int'`. LLM-supplied numerics are plausibly strings, so every
+# numeric the scorer compares is coerced defensively; an uncoercible value
+# behaves as absent.
+def test_regression_d4_numeric_fields_are_coerced_defensively() -> None:
+    afiliado = _afiliado("A", 880)
+    baseline, _, _, _ = score_lead(_ready_lead(), afiliado)
+
+    # `numero_pac` as a string still fires the +8 bonus, and does not raise.
+    for pac in ("2", " 2 ", "2.0", 2.0, 2):
+        assert build_scoring_result(_ready_lead(numero_pac=pac), afiliado)[
+            "breakdown"
+        ]["ajustes"] == 8, pac
+
+    # Uncoercible / absent → no bonus, no exception.
+    for pac in ("", "muchos", "n/a", None, [], "0"):
+        assert build_scoring_result(_ready_lead(numero_pac=pac), afiliado)[
+            "breakdown"
+        ]["ajustes"] == 0, pac
+        assert score_lead(_ready_lead(numero_pac=pac), afiliado)[0] == baseline
+
+    # `score_credito` arriving as a string bands normally; garbage is Malo.
+    score, rating, _, _ = score_lead(
+        _ready_lead(), {"categoria_afiliado": "A", "score_credito": "880"}
+    )
+    assert (score, rating) == (baseline, "Excelente")
+    _, garbage_rating, _, _ = score_lead(
+        _ready_lead(), {"categoria_afiliado": "A", "score_credito": "sin dato"}
+    )
+    assert garbage_rating == "Malo"
+
+    # A non-string `numero_documento` still simulates instead of raising.
+    numeric_doc, _, _, _ = score_lead(_ready_lead(numero_documento=12345678), None)
+    str_doc, _, _, _ = score_lead(_ready_lead(numero_documento="12345678"), None)
+    assert numeric_doc == str_doc
+
+
 # ── Credit bands verifier: bands, NULL, simulate, demo cedulas ─────────────
 # Confirm the band table matches the source workbook legend
 # (`Afiliados Colsubsidio` R3:R8) and `design.md` §7.3 verbatim.
