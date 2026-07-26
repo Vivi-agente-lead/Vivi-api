@@ -13,11 +13,24 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends gcc libc6-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy project manifests first for better layer caching.
+# Install the pinned, reproducible dependency graph first (best layer caching:
+# this only invalidates when requirements.lock changes, not on every app edit).
+# requirements.lock is `pip freeze --exclude-editable` against the project's
+# pinned manifest — the editable self-reference `pip freeze` would otherwise
+# emit for this very package (`-e git+ssh://...#egg=vivi_api`) is stripped,
+# because a Docker build has no SSH key to clone it with.
+COPY requirements.lock ./
+RUN pip install --upgrade pip && pip install -r requirements.lock
+
+# Now copy the project itself and install it with no further dependency
+# resolution (everything it needs is already satisfied by the lock above).
+# `scripts/` must ship in the image — `scripts.seed_colsubsidio` is what
+# populates the demo data once the container is running on Fly.
 COPY pyproject.toml README.md ./
 COPY app ./app
+COPY scripts ./scripts
 
-RUN pip install --upgrade pip && pip install "."
+RUN pip install --no-deps "."
 
 EXPOSE 8000
 
