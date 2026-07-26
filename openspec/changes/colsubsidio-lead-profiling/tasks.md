@@ -124,13 +124,13 @@ the change's stated risk mitigation did not exist.
 
 ## Phase 2 — Scoring (pure; parallel with Phase 1 after 1.1)
 
-- [ ] **2.1 Credit bands**
+- [x] **2.1 Credit bands**
   `app/services/credit_bands.py` — the six bands verbatim from the workbook legend,
   `band_from_score_credito(score) -> (pts, label)` returning `(0, "Malo")` for NULL,
   and `simulate_bureau_cedula`.
   *Files*: `app/services/credit_bands.py`
 
-- [ ] **2.2 Scorer tests (write first)**
+- [x] **2.2 Scorer tests (write first)**
   `tests/test_lead_scorer.py` — the 12 cases in `design.md` §11. The two that guard
   regressions the audit found: **case 5** (`estado_civil='soltero'` with
   `subsidio_vivienda_anterior=True` still yields `nurture`) and **case 8**
@@ -138,7 +138,7 @@ the change's stated risk mitigation did not exist.
   outscores an otherwise-identical no-afiliado).
   *Files*: `tests/test_lead_scorer.py` · *spec*: `lead-scoring`
 
-- [ ] **2.3 Scorer**
+- [x] **2.3 Scorer**
   `app/services/lead_scorer.py` per `design.md` §7.3. Six buckets summing to 100,
   exact slug lookup everywhere, `0` for unknown, additive red flags then clamp,
   affiliation-dependent READY threshold, subsidio-previo override that never touches
