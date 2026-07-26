@@ -149,7 +149,7 @@ the change's stated risk mitigation did not exist.
 
 ## Phase 3 — Tools
 
-- [ ] **3.1 Replace the tool module**
+- [x] **3.1 Replace the tool module**
   Five tools per `design.md` §5: `lookup_afiliado`, `save_lead`, `get_lead`,
   `get_projects`, `classify_lead`. Delete the `search_leads` and `score_lead` stubs.
   `save_lead` normalizes every enumerated field before writing and records rejects in
@@ -157,11 +157,11 @@ the change's stated risk mitigation did not exist.
   `'VIS'` repair. No `langgraph` import.
   *Files*: `app/tools/lead_tools.py` · *spec*: `agent-tools`
 
-- [ ] **3.2 Tool registry**
+- [x] **3.2 Tool registry**
   Wire the five tools to role `"agent"`.
   *Files*: `app/tools/tool_registry.py`
 
-- [ ] **3.3 Tool tests**
+- [x] **3.3 Tool tests**
   `tests/test_lead_tools.py` — `save_lead` upsert preserves prior fields and never
   promotes `status`; `get_lead` returns `null` with no row; `lookup_afiliado` accepts
   all five document slugs and rejects `TI`; `get_projects` returns rows for `'Bogota'`;
