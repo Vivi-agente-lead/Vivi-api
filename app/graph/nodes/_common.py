@@ -334,8 +334,13 @@ def _interactive_kwargs(pending: Field, phrased_text: str) -> dict[str, Any]:
     }
 
 
-def _recent_messages(state: Any, limit: int = 6) -> list[Any]:
-    """The tail of the conversation, for tone continuity only."""
+def _recent_messages(state: Any, limit: int = 2) -> list[Any]:
+    """The tail of the conversation, for tone continuity only.
+
+    Two turns, not six. The model is rewording one question, not reasoning over
+    the conversation, so the extra history bought nothing and every message is
+    input tokens the person waits for before the first word comes back.
+    """
     messages = state.get("messages") or []
     return list(messages)[-limit:]
 

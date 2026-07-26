@@ -61,6 +61,12 @@ class Settings(BaseSettings):
 
     # ── Agent runtime ──
     llm_checkpointer: str = Field(default="memory", description="memory | postgres")
+    # The model only rewords an already-written question, and that call is the
+    # whole latency the person feels between their answer and Vivi's reply.
+    # Both are tunable from the environment so a slow demo can be fixed without
+    # a redeploy; on timeout the deterministic question is sent instead.
+    llm_phrase_timeout_seconds: float = Field(default=6.0)
+    llm_phrase_max_tokens: int = Field(default=120)
     agent_max_turns: int = Field(default=10)
     agent_timeout_seconds: int = Field(default=60)
     agent_history_limit: int = Field(default=20)

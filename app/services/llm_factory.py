@@ -30,12 +30,26 @@ def _build_llm_cached() -> "ChatOpenAI":
     """Build and cache the ChatOpenAI singleton."""
     from langchain_openai import ChatOpenAI
 
+    # The model has exactly one job here: rewording a question that already
+    # exists, in one or two sentences (`app/graph/nodes/_common.py::phrase`).
+    # Every parameter below is sized for that, because this call sits between
+    # the person's answer and Vivi's next message — it is the whole perceived
+    # latency of the conversation.
+    #
+    # `max_tokens` bounds generation, which is what actually costs time; without
+    # it a chatty completion stretches a two-line question into seconds. The
+    # timeout is short and separate from `agent_timeout_seconds` (which covers
+    # the whole graph): a rewrite that has not arrived in a few seconds is worth
+    # less than answering promptly, and `phrase` already falls back to the
+    # deterministic question. One retry rather than two for the same reason —
+    # retrying a timeout is how a slow turn becomes a very slow turn.
     return ChatOpenAI(
         model=settings.openai_model,
         temperature=settings.openai_temperature,
         api_key=settings.openai_api_key,
-        max_retries=2,
-        timeout=settings.agent_timeout_seconds,
+        max_retries=1,
+        timeout=settings.llm_phrase_timeout_seconds,
+        max_tokens=settings.llm_phrase_max_tokens,
     )
 
 
