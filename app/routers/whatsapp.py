@@ -4,17 +4,22 @@ GET  /whatsapp/webhook → initial verification handshake (hub.verify_token).
 POST /whatsapp/webhook → inbound messages + statuses from Meta.
 
 No auth: this endpoint is itself the auth boundary for Meta callbacks.
-Verify-token guards the GET; signature verification is a TODO (Meta signs the
-X-Hub-Signature-256 header). For hackathon, token check suffices.
+`hub.verify_token` guards the GET handshake only — it does NOT cover the
+POST route. POST requests are authenticated via the `X-Hub-Signature-256`
+header: an HMAC-SHA256 of the raw request body keyed with the Meta app
+secret (`WHATSAPP_APP_SECRET`).
 """
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
 import logging
 import uuid
 
 from fastapi import APIRouter, BackgroundTasks, Query, Request, status
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 
 from app.core.config import settings
 from app.core.db import async_session_maker
@@ -81,14 +86,62 @@ async def _process_in_background(
             logger.exception("whatsapp.background.process_failed", extra={"external_id": external_id})
 
 
-@router.post("/webhook")
+def _skip_signature_verification() -> bool:
+    """Whether an empty `WHATSAPP_APP_SECRET` should skip verification.
+
+    Only true in `development` — local iteration should not require a real
+    Meta app secret. In any other `app_env`, an empty secret does NOT skip
+    verification: the HMAC comparison below will simply never match a real
+    Meta-signed request, so the endpoint fails closed (403) instead of
+    silently accepting unsigned payloads.
+    """
+    if settings.whatsapp_app_secret:
+        return False
+    if settings.app_env == "development":
+        logger.warning(
+            "whatsapp.webhook.signature_verification_skipped: "
+            "WHATSAPP_APP_SECRET is empty — skipping signature verification "
+            "(development only)."
+        )
+        return True
+    return False
+
+
+def _signature_is_valid(raw_body: bytes, signature_header: str | None) -> bool:
+    """HMAC-SHA256 of the raw body, keyed with the app secret, compared with
+    `hmac.compare_digest` against `X-Hub-Signature-256: sha256=<hex>`."""
+    if not signature_header or not signature_header.startswith("sha256="):
+        return False
+    expected = hmac.new(
+        settings.whatsapp_app_secret.encode("utf-8"), raw_body, hashlib.sha256
+    ).hexdigest()
+    provided = signature_header[len("sha256="):]
+    return hmac.compare_digest(expected, provided)
+
+
+@router.post("/webhook", response_model=None)
 async def receive_webhook(
     request: Request,
     background_tasks: BackgroundTasks,
-) -> dict:
-    """Receive Meta webhook POST. Return 200 fast; process in background."""
+) -> dict | JSONResponse:
+    """Receive Meta webhook POST. Return 200 fast; process in background.
+
+    Reads the raw body once (the signature is computed over the raw bytes,
+    not a re-serialized JSON payload) and reuses it both for signature
+    verification and for parsing.
+    """
+    raw_body = await request.body()
+
+    if not _skip_signature_verification():
+        signature_header = request.headers.get("X-Hub-Signature-256")
+        if not _signature_is_valid(raw_body, signature_header):
+            logger.warning("whatsapp.webhook.signature_invalid")
+            return JSONResponse(
+                status_code=status.HTTP_403_FORBIDDEN, content={"status": "forbidden"}
+            )
+
     try:
-        body = await request.json()
+        body = json.loads(raw_body)
     except Exception:
         # If not JSON, ignore. Meta occasionally sends other formats.
         logger.warning("whatsapp.post.non_json_body")
@@ -104,23 +157,46 @@ async def receive_webhook(
     return {"status": "queued"}
 
 
-@router.post("/simulate")
-async def simulate_inbound(
-    background_tasks: BackgroundTasks,
-    text: str = Query(..., min_length=1, max_length=4000, description="Message text as the client would write it."),
-    from_phone: str = Query(..., min_length=8, max_length=20, alias="from", description="Phone number in international format, digits only (e.g. 584245032990). Acts as the conversation key."),
-    dry_run: bool = Query(True, description="When true, runs the agent but skips the outbound message to Meta (dev iteration without burning quota). Set to false to receive the reply on the real WhatsApp."),
-    external_id: str | None = Query(None, description="Optional idempotency id. Auto-generated if omitted so retries don't replay the agent."),
-) -> dict:
-    """Dev-only simulator of an inbound WhatsApp message.
+def _register_simulate_route() -> None:
+    """Register `POST /whatsapp/simulate` only in `development`.
 
-    Behaves identically to the real Meta webhook POST: enqueues background
-    processing, runs the agent, and (unless `dry_run=true`) sends the reply
-    through the Meta Graph API to `from`. Use this from Swagger/Postman to
-    test the conversation flow without needing an actual inbound message.
+    With `dry_run=false` this endpoint is an open relay: it sends arbitrary
+    WhatsApp messages to arbitrary recipients using the project's Meta
+    credentials. Registering it unconditionally would make any non-dev
+    deployment (e.g. the public Fly.io demo URL) an open relay. In any other
+    `app_env` the route is simply never added to the router, so FastAPI
+    answers 404 rather than 200/403 — there is nothing to authenticate
+    against because the route does not exist.
     """
-    ext_id = external_id or f"sim_{uuid.uuid4().hex}"
-    profile = "Dev Simulator"
-    logger.info("whatsapp.simulate", extra={"from": from_phone, "external_id": ext_id, "dry_run": dry_run})
-    background_tasks.add_task(_process_in_background, from_phone, text, ext_id, profile, dry_run)
-    return {"status": "queued", "from": from_phone, "external_id": ext_id, "dry_run": dry_run}
+    if settings.app_env != "development":
+        logger.info(
+            "whatsapp.simulate.not_registered", extra={"app_env": settings.app_env}
+        )
+        return
+
+    @router.post("/simulate")
+    async def simulate_inbound(
+        background_tasks: BackgroundTasks,
+        text: str = Query(..., min_length=1, max_length=4000, description="Message text as the client would write it."),
+        from_phone: str = Query(..., min_length=8, max_length=20, alias="from", description="Phone number in international format, digits only (e.g. 584245032990). Acts as the conversation key."),
+        dry_run: bool = Query(True, description="When true, runs the agent but skips the outbound message to Meta (dev iteration without burning quota). Set to false to receive the reply on the real WhatsApp."),
+        external_id: str | None = Query(None, description="Optional idempotency id. Auto-generated if omitted so retries don't replay the agent."),
+    ) -> dict:
+        """Dev-only simulator of an inbound WhatsApp message.
+
+        Behaves identically to the real Meta webhook POST: enqueues background
+        processing, runs the agent, and (unless `dry_run=true`) sends the reply
+        through the Meta Graph API to `from`. Use this from Swagger/Postman to
+        test the conversation flow without needing an actual inbound message.
+
+        Only registered when `settings.app_env == "development"` — see the
+        `Public Deployment Hardening` requirement in the `demo-deployment` spec.
+        """
+        ext_id = external_id or f"sim_{uuid.uuid4().hex}"
+        profile = "Dev Simulator"
+        logger.info("whatsapp.simulate", extra={"from": from_phone, "external_id": ext_id, "dry_run": dry_run})
+        background_tasks.add_task(_process_in_background, from_phone, text, ext_id, profile, dry_run)
+        return {"status": "queued", "from": from_phone, "external_id": ext_id, "dry_run": dry_run}
+
+
+_register_simulate_route()
