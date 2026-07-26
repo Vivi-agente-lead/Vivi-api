@@ -175,17 +175,17 @@ the change's stated risk mitigation did not exist.
 Land 4.4 (the smallest end-to-end machine) before adding branches — that was the
 design's own risk mitigation for API drift and it still applies.
 
-- [ ] **4.1 Agent state**
+- [x] **4.1 Agent state**
   `lead_profile`, `current_node`, `pending_user_reply`. Retire `lead_profile_draft`.
   *Files*: `app/graph/state.py`
 
-- [ ] **4.2 Routers**
+- [x] **4.2 Routers**
   `app/graph/router.py` — the five predicates from `design.md` §3. All terminal
   returns use the **`END` sentinel imported from `langgraph.graph`**, never the string
   `"END"`. `edad is None` routes to `END` in both age gates.
   *Files*: `app/graph/router.py` · *closes*: LOGIC-002, LOGIC-003
 
-- [ ] **4.3 Router tests**
+- [x] **4.3 Router tests**
   `tests/test_router.py` — table-driven over every branch, including
   `divorciado`/`separado`/`viudo` reaching the `sin_pareja` bundles, and both underage
   gates returning `END`.
