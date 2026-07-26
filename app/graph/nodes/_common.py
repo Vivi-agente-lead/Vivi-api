@@ -171,6 +171,14 @@ async def collect(
         delta["pending_user_reply"] = ""
 
     if pending is not None:
+        if consumed and persist_fields is not None:
+            # Mirror after every accepted answer, not only when the bundle
+            # completes. A capacity bundle holds 11 fields; persisting only at
+            # the end meant a lead who dropped out mid-bundle left a `leads`
+            # row with those columns NULL, losing the auditable artifact this
+            # change exists to produce. `save_lead` upserts and merges, so
+            # writing the partial profile repeatedly is safe and idempotent.
+            await persist(profile, config, persist_fields)
         question = pending.question_for(profile)
         if intro and not any(profile.get(item.name) is not None for item in fields):
             # The source flow's reassurance message before the capacity block.
@@ -231,23 +239,38 @@ async def phrase(
     question: str,
     options: Sequence[str] = (),
 ) -> str:
-    """Let the model rewrite `question`; fall back to it verbatim.
+    """Let the model write the human part; the code owns the option list.
 
-    The rewrite is rejected — and the deterministic text sent instead — when it
-    drops any source option label, when it is empty, or when the model is
-    unavailable. An enumerated answer that never saw its option list cannot be
-    normalized, and the scorer's bucket would silently contribute 0.
+    The question is split into a stem and its option lines. Only the stem goes
+    to the model, and the options are appended verbatim afterwards. That is what
+    makes a natural tone possible: the previous revision asked the model to
+    rewrite the whole message and then **rejected any rewrite that did not
+    reproduce every option label verbatim**, so the only rewrites that survived
+    were the ones that kept the bullet list intact. The result read like a form.
+
+    Splitting the two removes the conflict. The model is free on the sentence
+    that carries the tone, and the person still sees an exact, complete menu —
+    which the normalizer needs and `_tolerance` widens rather than replaces.
+
+    Falls back to the deterministic text when the model is unavailable, errors,
+    or returns nothing.
     """
     if not is_llm_configured():
         return question
 
+    stem, option_block = _split_question(question)
     system = render_system_prompt(node, lead_profile=profile)
     instruction = (
-        "Reescribe el siguiente mensaje para esta persona, en español "
-        "colombiano neutro y cercano, tuteando, en máximo tres frases. "
-        "Conserva las opciones exactamente como están escritas, una por línea. "
-        "No agregues preguntas nuevas.\n\n"
-        f"--- MENSAJE BASE ---\n{question}\n--- FIN MENSAJE BASE ---"
+        "Escribe el siguiente turno de la conversación en español colombiano "
+        "neutro y cercano, tuteando.\n"
+        "- Si la persona acaba de darte un dato, reconócelo en pocas palabras "
+        "antes de seguir (por ejemplo: «Listo, quedaste como casado.»).\n"
+        "- Formula UNA sola pregunta, la que va abajo. Puedes cambiar las "
+        "palabras; no cambies lo que se pregunta.\n"
+        "- No enumeres las opciones: se agregan automáticamente después de tu "
+        "mensaje.\n"
+        "- Máximo dos frases. Sin emojis, sin saludos repetidos.\n\n"
+        f"--- PREGUNTA ---\n{stem}\n--- FIN PREGUNTA ---"
     )
     history = _recent_messages(state)
     try:
@@ -261,15 +284,23 @@ async def phrase(
     text = (getattr(result, "content", "") or "").strip()
     if not text:
         return question
-    folded = fold(text)
-    missing = [option for option in options if fold(option) not in folded]
-    if missing:
-        logger.warning(
-            "graph.phrase_dropped_options",
-            extra={"node": node, "missing": missing},
-        )
-        return question
+    if option_block:
+        text = f"{text}\n{option_block}"
     return text
+
+
+def _split_question(question: str) -> tuple[str, str]:
+    """Separate a question's stem from its `- option` lines.
+
+    The option block is reattached verbatim after the model has spoken, so the
+    person always sees the exact source labels even when the phrasing around
+    them changes turn to turn.
+    """
+    stem: list[str] = []
+    block: list[str] = []
+    for line in question.splitlines():
+        (block if line.lstrip().startswith("-") else stem).append(line)
+    return "\n".join(stem).strip(), "\n".join(block).strip()
 
 
 def _recent_messages(state: Any, limit: int = 6) -> list[Any]:

@@ -28,6 +28,7 @@ from app.models.constants import (
     CONTRATO_EMPLEADO,
     ESTADO_CIVIL_CON_PAREJA,
 )
+from app.graph.nodes._tolerance import interpret
 from app.services.domain_normalizer import normalize, normalize_municipio
 
 __all__ = [
@@ -208,12 +209,26 @@ def note_rejected(field: str, raw: Any) -> str:
 def validate_enumerated(field: str, raw: str | None) -> str | None:
     """Canonical slug for an enumerated lead field, or `None`.
 
-    Delegates to `domain_normalizer.normalize`, which accepts both the verbatim
-    source label the slice showed the person and the canonical slug.
+    Two attempts, in order:
+
+    1. `domain_normalizer.normalize` — exact after folding, accepting the
+       verbatim source label the slice showed the person, or the slug.
+    2. `_tolerance.interpret` — deterministic second chance for the shapes
+       people actually type ("8 millones", "fijo", "mas de 2 años"). Money and
+       duration are resolved numerically against the same band boundaries the
+       affiliate derivation uses, never by similarity, so the score stays a
+       pure function of the answer.
+
+    Rule 1 of this module still holds: when both fail the result is `None`, the
+    node re-asks and the bucket contributes `0`. Nothing here guesses.
     """
     if raw is None:
         return None
-    return normalize(field, str(raw))
+    text = str(raw)
+    exact = normalize(field, text)
+    if exact is not None:
+        return exact
+    return interpret(field, text)
 
 
 def validate_municipio(raw: str | None) -> str | None:
